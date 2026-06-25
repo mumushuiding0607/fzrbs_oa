@@ -1820,7 +1820,7 @@ class BudgetController extends ApiBase{
     // 查询 history 记录获取各阶段的结束时间
     // history.state = 审批结束时项目的状态 = approvaltype
     $historyList = FzrbsBudgetHistory::find()
-      ->select('state, inserttime, submitdate')
+      ->select('state, inserttime, data')
       ->where(['=','projectid',$projectid])
       ->orderBy('inserttime asc')
       ->asArray()->all();
@@ -1833,9 +1833,12 @@ class BudgetController extends ApiBase{
       if ($t && !isset($historyByType[$t])){
         $historyByType[$t] = $h['inserttime'];
       }
-      // 提交计量(4/5)的结束时间是submitdate
-      if (($t == 4 || $t == 5) && !empty($h['submitdate'])){
-        $historySubmitDate = $h['submitdate'];
+      // 提交计量(4/5)的结束时间是history.data.submitdate
+      if ($t == 4 || $t == 5){
+        $hdata = json_decode($h['data'], true);
+        if ($hdata && isset($hdata['submitdate']) && !empty($hdata['submitdate'])){
+          $historySubmitDate = $hdata['submitdate'];
+        }
       }
     }
 
