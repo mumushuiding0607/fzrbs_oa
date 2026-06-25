@@ -1820,17 +1820,17 @@ class BudgetController extends ApiBase{
     // 查询 history 记录获取各阶段的结束时间
     // history.state = 审批结束时项目的状态 = approvaltype
     $historyList = FzrbsBudgetHistory::find()
-      ->select('state, createtime')
+      ->select('state, inserttime')
       ->where(['=','projectid',$projectid])
-      ->orderBy('createtime asc')
+      ->orderBy('inserttime asc')
       ->asArray()->all();
 
-    // 按 state 建立映射：key=approvaltype, value=结束时间(createtime)
-    $historyByType = []; // key: approvaltype(=history.state), value: createtime
+    // 按 state 建立映射：key=approvaltype, value=结束时间(inserttime)
+    $historyByType = []; // key: approvaltype(=history.state), value: inserttime
     foreach ($historyList as $h){
       $t = intval($h['state']);
       if ($t && !isset($historyByType[$t])){
-        $historyByType[$t] = $h['createtime'];
+        $historyByType[$t] = $h['inserttime'];
       }
     }
 
