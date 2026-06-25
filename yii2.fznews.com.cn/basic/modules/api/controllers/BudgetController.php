@@ -1811,102 +1811,65 @@ class BudgetController extends ApiBase{
     $projectid = $this->_request['projectid'];
     if (!$projectid) return array('errorMessage'=>'projectid 不能为空');
 
-    // 查询 history 记录
-    $histories = FzrbsBudgetHistory::find()->alias('h')
-      ->select('h.state, h.data, h.createtime, d.label as statename')
-      ->leftJoin(['d'=>FzrbsBudgetDict::tableName()],"d.value=h.state and d.type='审批类型'")
-      ->where(['=','h.projectid',$projectid])
-      ->orderBy('h.createtime asc')
-      ->asArray()->all();
-
-    if (!$histories){
-      return array('errorMessage'=>'无历史记录');
+    // 查询项目信息和状态
+    $project = FzrbsBudgetProject::find()->select('state, locked, lockdate, inserttime, thirdno')->where(['id'=>$projectid])->asArray()->one();
+    if (!$project){
+      return array('errorMessage'=>'项目不存在');
     }
 
-    // 收集所有 thirdNo，批量查询 approval_info
-    $thirdNos = [];
-    foreach ($histories as $h){
-      $d = json_decode($h['data'],1);
-      if ($d && isset($d['thirdno']) && $d['thirdno']){
-        $thirdNos[] = $d['thirdno'];
-      }
-    }
-
-    // 批量查询 approval_info 的 inserttime 和 data JSON 中的 approvaltype
-    $approvalMap = []; // key: thirdNo, value: ['inserttime'=>..., 'approvaltype'=>...]
-    if ($thirdNos){
-      $approvalInfos = WeixinOaApprovalInfo::find()
+    // 查询该项目所有相关的 approval_info 记录（通过 thirdNo）
+    $approvalList = [];
+    if ($project['thirdno']){
+      $approvalList = WeixinOaApprovalInfo::find()
         ->select('thirdNo, inserttime, data')
-        ->where(['and',['in','thirdNo',$thirdNos],['agentId'=>$this->agentId]])
+        ->where(['and',['=','thirdNo',$project['thirdno']],['agentId'=>$this->agentId]])
+        ->orderBy('inserttime asc')
         ->asArray()->all();
-      foreach ($approvalInfos as $ai){
-        $adata = json_decode($ai['data'],1);
-        $approvalMap[$ai['thirdNo']] = array(
-          'inserttime' => $ai['inserttime'],
-          'approvaltype' => $adata['approvaltype'] ?? null,
-        );
+    }
+
+    // 解析每个 approval_info 的 data JSON，提取 approvaltype
+    $approvalByType = []; // key: approvaltype, value: inserttime
+    foreach ($approvalList as $ai){
+      $adata = json_decode($ai['data'],1);
+      $approvalType = isset($adata['approvaltype']) ? intval($adata['approvaltype']) : 0;
+      if ($approvalType && !isset($approvalByType[$approvalType])){
+        $approvalByType[$approvalType] = $ai['inserttime'];
       }
     }
 
-    // 按 state 分组，每组取第一条的 approval_inserttime 作为进入时间
-    $stateMap = []; // key: state, value: ['approval_inserttime'=>..., 'project_inserttime'=>..., 'statename'=>...]
-    foreach ($histories as $h){
-      $state = intval($h['state']);
-      if (!isset($stateMap[$state])){
-        $d = json_decode($h['data'],1);
-        $approvalInserttime = null;
-        if ($d && isset($d['thirdno']) && isset($approvalMap[$d['thirdno']])){
-          $approvalInserttime = $approvalMap[$d['thirdno']]['inserttime'];
-        }
-        $stateMap[$state] = array(
-          'state' => $state,
-          'statename' => $h['statename'],
-          'approval_inserttime' => $approvalInserttime,
-          'project_inserttime' => $h['createtime'],
-        );
+    // 按 state 分组获取进入时间（从 approval_info.inserttime）
+    $stateEnterTime = []; // key: state(1-5), value: inserttime
+    $stateLabels = [
+      1 => '立项',
+      2 => '预算',
+      3 => '决算',
+      4 => '提交计量',
+      5 => '提交计量',
+    ];
+    foreach ([1,2,3,4,5] as $s){
+      if (isset($approvalByType[$s])){
+        $stateEnterTime[$s] = $approvalByType[$s];
       }
     }
 
-    // 查询项目当前状态和 locked 信息
-    $project = FzrbsBudgetProject::find()->select('state, locked, lockdate, inserttime')->where(['id'=>$projectid])->asArray()->one();
+    // 当前项目状态
+    $currentState = intval($project['state']);
 
-    // 组装时间轴数据：立项(1) -> 预算(2) -> 决算(3) -> 提交计量(4/5) -> 归档
+    // 组装时间轴数据
     $timeline = [];
-    $stageMap = array(
-      1 => array('key'=>'start', 'label'=>'立项'),
-      2 => array('key'=>'budget', 'label'=>'预算'),
-      3 => array('key'=>'final', 'label'=>'决算'),
-      4 => array('key'=>'submit', 'label'=>'提交计量'),
-      5 => array('key'=>'submit', 'label'=>'提交计量'),
-    );
-
-    $sortedStates = array_keys($stateMap);
-    sort($sortedStates);
-
-    foreach ($stageMap as $state => $stageInfo){
-      $node = $stateMap[$state] ?? null;
-      $enterTime = $node ? ($node['approval_inserttime'] ?: $node['project_inserttime']) : null;
+    $states = [1, 2, 3, 4, 5];
+    foreach ($states as $idx => $state){
+      $enterTime = $stateEnterTime[$state] ?? null;
 
       // 结束时间 = 下一 state 的进入时间
       $endTime = null;
-      $nextStateKey = array_search($state, $sortedStates) !== false ? ($sortedStates[array_search($state, $sortedStates) + 1] ?? null) : null;
-      if ($nextStateKey !== null && isset($stateMap[$nextStateKey])){
-        $nextNode = $stateMap[$nextStateKey];
-        $endTime = $nextNode['approval_inserttime'] ?: $nextNode['project_inserttime'];
+      $nextState = isset($states[$idx + 1]) ? $states[$idx + 1] : null;
+      if ($nextState && isset($stateEnterTime[$nextState])){
+        $endTime = $stateEnterTime[$nextState];
       }
 
-      // 当前状态判断
-      $currentState = $project ? intval($project['state']) : 0;
       $isCurrent = ($currentState == $state);
       $isFinished = ($currentState > $state);
-
-      // 归档节点
-      $isArchived = false;
-      if ($state === 5 && $project && $project['locked'] == 1){
-        $isArchived = true;
-        $enterTime = $project['lockdate'] ?: $enterTime;
-        $endTime = null;
-      }
 
       // 计算耗时
       $durationDays = null;
@@ -1919,20 +1882,20 @@ class BudgetController extends ApiBase{
       }
 
       $timeline[] = array(
-        'key' => $stageInfo['key'],
-        'label' => $stageInfo['label'],
+        'key' => $state <= 3 ? ($state == 1 ? 'start' : ($state == 2 ? 'budget' : 'final')) : 'submit',
+        'label' => $stateLabels[$state],
         'state' => $state,
         'enterTime' => $enterTime,
         'endTime' => $endTime,
         'durationDays' => $durationDays,
         'isCurrent' => $isCurrent,
         'isFinished' => $isFinished,
-        'isArchived' => $isArchived,
+        'isArchived' => false,
       );
     }
 
     // 添加归档节点
-    if ($project && $project['locked'] == 1){
+    if ($project['locked'] == 1){
       $timeline[] = array(
         'key' => 'archive',
         'label' => '归档',
