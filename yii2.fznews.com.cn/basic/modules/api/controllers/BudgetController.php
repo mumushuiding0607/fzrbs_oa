@@ -1820,17 +1820,22 @@ class BudgetController extends ApiBase{
     // 查询 history 记录获取各阶段的结束时间
     // history.state = 审批结束时项目的状态 = approvaltype
     $historyList = FzrbsBudgetHistory::find()
-      ->select('state, inserttime')
+      ->select('state, inserttime, submitdate')
       ->where(['=','projectid',$projectid])
       ->orderBy('inserttime asc')
       ->asArray()->all();
 
-    // 按 state 建立映射：key=approvaltype, value=结束时间(inserttime)
+    // 按 state 建立映射：key=approvaltype, value=结束时间
     $historyByType = []; // key: approvaltype(=history.state), value: inserttime
+    $historySubmitDate = null; // 提交计量的结束时间
     foreach ($historyList as $h){
       $t = intval($h['state']);
       if ($t && !isset($historyByType[$t])){
         $historyByType[$t] = $h['inserttime'];
+      }
+      // 提交计量(4/5)的结束时间是submitdate
+      if (($t == 4 || $t == 5) && !empty($h['submitdate'])){
+        $historySubmitDate = $h['submitdate'];
       }
     }
 
@@ -1878,7 +1883,7 @@ class BudgetController extends ApiBase{
     if (isset($approvalByType[1])) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByType[1], 'endTime'=>$historyByType[1] ?? null);
     if (isset($approvalByType[2])) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByType[2], 'endTime'=>$historyByType[2] ?? null);
     if (isset($approvalByType[3])) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByType[3], 'endTime'=>$historyByType[3] ?? null);
-    if (isset($approvalByType[4])) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>$approvalByType[4], 'endTime'=>$submitDate);
+    if (isset($approvalByType[4])) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>$approvalByType[4], 'endTime'=>$historySubmitDate);
 
     // 组装时间轴
     $timeline = [];
