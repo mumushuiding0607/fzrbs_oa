@@ -1817,14 +1817,32 @@ class BudgetController extends ApiBase{
       return array('errorMessage'=>'项目不存在');
     }
 
-    // 查询该项目所有相关的 approval_info 记录（通过 thirdNo）
+    // 查询该项目所有相关的 approval_info 记录
+    // 方式1：通过 thirdNo
+    // 方式2：通过 data JSON 中的 projectid
     $approvalList = [];
-    if ($project['thirdno']){
+    $thirdNo = $project['thirdno'];
+
+    // 直接通过项目的 thirdNo 查询
+    if ($thirdNo){
       $approvalList = WeixinOaApprovalInfo::find()
         ->select('thirdNo, inserttime, data')
-        ->where(['and',['=','thirdNo',$project['thirdno']],['agentId'=>$this->agentId]])
+        ->where(['and',['=','thirdNo',$thirdNo],['agentId'=>$this->agentId]])
         ->orderBy('inserttime asc')
         ->asArray()->all();
+    }
+
+    // 如果按 thirdNo 查不到，通过 data JSON 中的 projectid 模糊查询
+    if (empty($approvalList)){
+      // 使用原生 SQL 查找 data 字段包含 projectid 的记录
+      $sql = "SELECT thirdNo, inserttime, data FROM weixin_oa_approval_info
+              WHERE agentId = :agentId
+              AND data LIKE :projectid
+              ORDER BY inserttime ASC";
+      $approvalList = Yii::$app->db->createCommand($sql, [
+        ':agentId' => $this->agentId,
+        ':projectid' => '%"projectid":' . intval($projectid) . '%',
+      ])->queryAll();
     }
 
     // 解析每个 approval_info 的 data JSON，提取 approvaltype
@@ -1836,6 +1854,8 @@ class BudgetController extends ApiBase{
         $approvalByType[$approvalType] = $ai['inserttime'];
       }
     }
+    // DEBUG
+    return array('debug'=>array('project'=>$project,'approvalList'=>$approvalList,'approvalByType'=>$approvalByType));
 
     // 按 state 分组获取进入时间（从 approval_info.inserttime）
     $stateEnterTime = []; // key: state(1-5), value: inserttime
