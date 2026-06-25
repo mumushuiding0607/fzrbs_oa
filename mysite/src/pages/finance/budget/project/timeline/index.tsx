@@ -11,7 +11,6 @@ interface TimelineStage {
   durationDays: number | null;
   isCurrent: boolean;
   isFinished: boolean;
-  isArchived: boolean;
 }
 
 interface ProjectInfo {

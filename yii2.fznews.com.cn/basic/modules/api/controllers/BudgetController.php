@@ -1812,7 +1812,7 @@ class BudgetController extends ApiBase{
     if (!$projectid) return array('errorMessage'=>'projectid 不能为空');
 
     // 查询项目信息和状态
-    $project = FzrbsBudgetProject::find()->select('state, locked, lockdate, inserttime, thirdno')->where(['id'=>$projectid])->asArray()->one();
+    $project = FzrbsBudgetProject::find()->select('state, inserttime, thirdno')->where(['id'=>$projectid])->asArray()->one();
     if (!$project){
       return array('errorMessage'=>'项目不存在');
     }
@@ -1891,21 +1891,6 @@ class BudgetController extends ApiBase{
         'isCurrent' => $isCurrent,
         'isFinished' => $isFinished,
         'isArchived' => false,
-      );
-    }
-
-    // 添加归档节点
-    if ($project['locked'] == 1){
-      $timeline[] = array(
-        'key' => 'archive',
-        'label' => '归档',
-        'state' => 0,
-        'enterTime' => $project['lockdate'] ?: null,
-        'endTime' => null,
-        'durationDays' => null,
-        'isCurrent' => false,
-        'isFinished' => true,
-        'isArchived' => true,
       );
     }
 
