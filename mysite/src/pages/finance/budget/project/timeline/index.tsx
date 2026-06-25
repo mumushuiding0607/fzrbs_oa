@@ -1,33 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Tooltip } from 'antd';
-import { getprohistory, getprojectbyid } from './service';
-
-const STAGES = [
-  { key: 'start',   label: '立项',      state: 1 },
-  { key: 'budget',  label: '预算',      state: 2 },
-  { key: 'final',   label: '决算',      state: 3 },
-  { key: 'submit',  label: '提交计量',   state: [4, 5] },
-  { key: 'archive', label: '归档',      state: 'locked' },
-];
+import { getprotimeline } from './service';
 
 interface TimelineStage {
   key: string;
   label: string;
+  state: number;
   enterTime: string | null;
   endTime: string | null;
   durationDays: number | null;
   isCurrent: boolean;
   isFinished: boolean;
   isArchived: boolean;
-}
-
-interface HistoryItem {
-  state: number;
-  createtime: string;
-  statename: string;
-  data: string;
-  approvalInserttime: string | null;
-  projectInserttime: string | null;
 }
 
 interface ProjectInfo {
@@ -41,10 +25,9 @@ const TimelineCard: React.FC<{
   label: string;
   enterTime: string | null;
   endTime: string | null;
-  durationDays: number | null;
   isCurrent: boolean;
   isFinished: boolean;
-}> = ({ label, enterTime, endTime, durationDays, isCurrent, isFinished }) => {
+}> = ({ label, enterTime, endTime, isCurrent, isFinished }) => {
   const isReached = enterTime !== null;
 
   return (
@@ -69,7 +52,7 @@ const TimelineCard: React.FC<{
           进入: {enterTime ? enterTime.slice(0, 10) : '—'}
         </div>
         <div style={{ fontSize: 11, color: isCurrent ? '#fff' : '#999' }}>
-          结束: {endTime ? endTime.slice(0, 10) : (isCurrent ? '—' : '—')}
+          结束: {endTime ? endTime.slice(0, 10) : '—'}
         </div>
       </Card>
     </Tooltip>
@@ -84,86 +67,19 @@ const Arrow: React.FC = () => (
 
 const ProjectTimeline: React.FC<{ projectId: number | string }> = ({ projectId }) => {
   const [loading, setLoading] = useState(true);
-  const [timelineData, setTimelineData] = useState<Record<string, TimelineStage>>({});
-  const [projectInfo, setProjectInfo] = useState<ProjectInfo | null>(null);
+  const [timelineData, setTimelineData] = useState<TimelineStage[]>([]);
 
   useEffect(() => {
     if (!projectId) return;
 
-    Promise.all([
-      getprojectbyid({ id: projectId }),
-      getprohistory({ projectid: projectId }),
-    ]).then(([projRes, histRes]) => {
-      const project: ProjectInfo = projRes.data || {};
-      const historyList: HistoryItem[] = histRes.data || [];
-      setProjectInfo(project);
-
-      // 按 state 分组，取每个 state 最早的一条记录作为进入时间
-      const stateMap: Record<number, HistoryItem> = {};
-      historyList.forEach((item) => {
-        if (!stateMap[item.state]) {
-          stateMap[item.state] = item;
-        }
-      });
-
-      // 计算各阶段数据
-      const data: Record<string, TimelineStage> = {};
-      const sortedStates = Object.keys(stateMap).map(Number).sort((a, b) => a - b);
-      const maxState = sortedStates[sortedStates.length - 1] || 0;
-      const currentState = project.state;
-
-      STAGES.forEach((stage, idx) => {
-        let enterTime: string | null = null;
-        let endTime: string | null = null;
-        let isFinished = false;
-        let isCurrent = false;
-        let isArchived = false;
-
-        if (stage.key === 'archive') {
-          isArchived = project.locked === 1;
-          enterTime = isArchived ? (project.lockdate || null) : null;
-          isCurrent = false;
-          isFinished = isArchived;
-          endTime = null;
-        } else {
-          const targetState = Array.isArray(stage.state) ? stage.state : [stage.state];
-          const matchedItem = historyList.find((h) => targetState.includes(h.state));
-          // 开始时间：approval_info.inserttime
-          enterTime = matchedItem ? (matchedItem.approvalInserttime || matchedItem.projectInserttime || null) : null;
-          // 结束时间：project.inserttime
-          endTime = matchedItem ? (matchedItem.projectInserttime || null) : null;
-          isFinished = enterTime !== null && project.state > (Array.isArray(stage.state) ? stage.state[0] : stage.state);
-          isCurrent = currentState === (Array.isArray(stage.state) ? stage.state[0] : stage.state);
-
-          // 如果没有结束时间，用下一阶段的开始时间
-          if (!endTime) {
-            const nextStage = STAGES[idx + 1];
-            if (nextStage) {
-              if (nextStage.key === 'archive' && project.locked === 1) {
-                endTime = project.lockdate || null;
-              } else {
-                const nextState = Array.isArray(nextStage.state) ? nextStage.state : [nextStage.state];
-                const nextItem = historyList.find((h) => nextState.includes(h.state));
-                endTime = nextItem ? (nextItem.approvalInserttime || nextItem.projectInserttime || null) : null;
-              }
-            } else if (isFinished) {
-              endTime = new Date().toISOString();
-            }
-          }
-        }
-
-        // 计算耗时
-        let durationDays: number | null = null;
-        if (enterTime && endTime) {
-          const start = new Date(enterTime);
-          const end = new Date(endTime);
-          durationDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-        }
-
-        data[stage.key] = { key: stage.key, label: stage.label, enterTime, endTime, durationDays, isCurrent, isFinished, isArchived };
-      });
-
-      setTimelineData(data);
+    getprotimeline({ projectid: projectId }).then((res) => {
+      if (res.errorMessage) {
+        console.error(res.errorMessage);
+        setLoading(false);
+        return;
+      }
+      const stages: TimelineStage[] = res.data || [];
+      setTimelineData(stages);
       setLoading(false);
     });
   }, [projectId]);
@@ -174,16 +90,12 @@ const ProjectTimeline: React.FC<{ projectId: number | string }> = ({ projectId }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', padding: '16px 0' }}>
-      {STAGES.map((stage, idx) => {
-        const stageData = timelineData[stage.key];
-        if (!stageData) return null;
-        return (
-          <React.Fragment key={stage.key}>
-            <TimelineCard {...stageData} />
-            {idx < STAGES.length - 1 && <Arrow />}
-          </React.Fragment>
-        );
-      })}
+      {timelineData.map((stage, idx) => (
+        <React.Fragment key={stage.key}>
+          <TimelineCard {...stage} />
+          {idx < timelineData.length - 1 && <Arrow />}
+        </React.Fragment>
+      ))}
     </div>
   );
 };
