@@ -1812,18 +1812,15 @@ class BudgetController extends ApiBase{
     if (!$projectid) return array('errorMessage'=>'projectid 不能为空');
 
     // 查询项目信息和状态
-    $project = FzrbsBudgetProject::find()->select('state, inserttime, thirdno')->where(['id'=>$projectid])->asArray()->one();
+    $project = FzrbsBudgetProject::find()->select('state, inserttime, thirdno, submitdate')->where(['id'=>$projectid])->asArray()->one();
     if (!$project){
       return array('errorMessage'=>'项目不存在');
     }
 
     // 查询该项目所有相关的 approval_info 记录
-    // 方式1：通过 thirdNo
-    // 方式2：通过 data JSON 中的 projectid
     $approvalList = [];
     $thirdNo = $project['thirdno'];
 
-    // 直接通过项目的 thirdNo 查询
     if ($thirdNo){
       $approvalList = WeixinOaApprovalInfo::find()
         ->select('thirdNo, inserttime, data')
@@ -1832,9 +1829,7 @@ class BudgetController extends ApiBase{
         ->asArray()->all();
     }
 
-    // 如果按 thirdNo 查不到，通过 data JSON 中的 projectid 模糊查询
     if (empty($approvalList)){
-      // 使用原生 SQL 查找 data 字段包含 projectid 的记录
       $sql = "SELECT thirdNo, inserttime, data FROM weixin_oa_approval_info
               WHERE agentId = :agentId
               AND data LIKE :projectid
@@ -1845,10 +1840,8 @@ class BudgetController extends ApiBase{
       ])->queryAll();
     }
 
-    // 解析每个 approval_info，按插入顺序建立阶段时间映射
-    // approval_info.data.state = 项目当前状态
-    // approval_info.data.approvaltype = 审批类型
-    $approvalByState = []; // key: state值, value: ['enterTime'=>inserttime, 'approvalType'=>...]
+    // 解析每个 approval_info，按 state 建立映射
+    $approvalByState = []; // key: state值, value: inserttime
     foreach ($approvalList as $ai){
       $adata = json_decode($ai['data'],1);
       $state = isset($adata['state']) ? intval($adata['state']) : 0;
@@ -1857,47 +1850,42 @@ class BudgetController extends ApiBase{
       }
     }
 
-    // 按时间顺序排列的阶段列表，用于计算结束时间
-    $stateEnterTime = []; // key: state(1-5), value: inserttime
-    $stateLabels = [
-      1 => '立项',
-      2 => '预算',
-      3 => '决算',
-      4 => '提交计量',
-      5 => '提交计量',
-    ];
-    foreach ([1,2,3,4,5] as $s){
-      if (isset($approvalByState[$s])){
-        $stateEnterTime[$s] = $approvalByState[$s];
-      }
-    }
-
     // 当前项目状态
     $currentState = intval($project['state']);
+    $submitDate = $project['submitdate'] ?? null;
 
-    // 按 state 顺序组装时间轴，但结束时间用实际的时间顺序
-    // 先按时间顺序排列各阶段的进入时间
-    $sortedEnterTimes = $stateEnterTime;
-    asort($sortedEnterTimes); // 按时间升序
+    // 阶段配置：只显示有记录的阶段，提交计量(4/5)合并为一个
+    $stageConfig = [];
+    $hasState1 = isset($approvalByState[1]);
+    $hasState2 = isset($approvalByState[2]);
+    $hasState3 = isset($approvalByState[3]);
+    $hasState45 = isset($approvalByState[4]) || isset($approvalByState[5]);
 
+    if ($hasState1) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByState[1]);
+    if ($hasState2) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByState[2]);
+    if ($hasState3) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByState[3]);
+    if ($hasState45) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>isset($approvalByState[4]) ? $approvalByState[4] : (isset($approvalByState[5]) ? $approvalByState[5] : null));
+
+    // 组装时间轴
     $timeline = [];
-    $states = [1, 2, 3, 4, 5];
-    foreach ($states as $state){
-      $enterTime = $stateEnterTime[$state] ?? null;
+    foreach ($stageConfig as $idx => $stage){
+      $enterTime = $stage['enterTime'];
 
-      // 结束时间 = 下一个更晚的时间点
+      // 结束时间
       $endTime = null;
-      if ($enterTime){
-        foreach ($sortedEnterTimes as $s => $t){
-          if ($t > $enterTime){
-            $endTime = $t;
-            break;
-          }
+      if ($stage['key'] === 'submit'){
+        // 提交计量的结束时间是 submitdate
+        $endTime = $submitDate;
+      } else {
+        // 其他阶段的结束时间是下一审批阶段的进入时间
+        $nextStage = isset($stageConfig[$idx + 1]) ? $stageConfig[$idx + 1] : null;
+        if ($nextStage){
+          $endTime = $nextStage['enterTime'];
         }
       }
 
-      $isCurrent = ($currentState == $state);
-      $isFinished = ($currentState > $state);
+      $isCurrent = ($currentState == $stage['state']);
+      $isFinished = ($currentState > $stage['state']);
 
       // 计算耗时
       $durationDays = null;
@@ -1910,9 +1898,9 @@ class BudgetController extends ApiBase{
       }
 
       $timeline[] = array(
-        'key' => $state <= 3 ? ($state == 1 ? 'start' : ($state == 2 ? 'budget' : 'final')) : 'submit',
-        'label' => $stateLabels[$state],
-        'state' => $state,
+        'key' => $stage['key'],
+        'label' => $stage['label'],
+        'state' => $stage['state'],
         'enterTime' => $enterTime,
         'endTime' => $endTime,
         'durationDays' => $durationDays,
