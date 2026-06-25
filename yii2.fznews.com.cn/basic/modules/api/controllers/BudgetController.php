@@ -1854,8 +1854,6 @@ class BudgetController extends ApiBase{
         $approvalByType[$approvalType] = $ai['inserttime'];
       }
     }
-    // DEBUG
-    return array('debug'=>array('project'=>$project,'approvalList'=>$approvalList,'approvalByType'=>$approvalByType));
 
     // 按 state 分组获取进入时间（从 approval_info.inserttime）
     $stateEnterTime = []; // key: state(1-5), value: inserttime
