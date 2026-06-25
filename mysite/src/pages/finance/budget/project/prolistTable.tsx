@@ -275,7 +275,7 @@ const ProlistTable: React.FC<{projectid:any}> = ({projectid}) =>{
     <>
     <ProTable
               scroll={{x:'100%'}}
-              headerTitle={<><h2>历史审批数据</h2><ProjectTimeline projectId={projectid} /></>}
+              headerTitle={<ProjectTimeline projectId={projectid} />}
               search={false}
               rowKey={record=>record.id}
               tableAlertRender={false}

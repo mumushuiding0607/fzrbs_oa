@@ -1840,13 +1840,14 @@ class BudgetController extends ApiBase{
       ])->queryAll();
     }
 
-    // 解析每个 approval_info，按 state 建立映射
-    $approvalByState = []; // key: state值, value: inserttime
+    // 解析每个 approval_info，按 approvaltype 建立映射
+    // approvaltype: 1=立项, 2=预算, 3=决算, 4=提交计量
+    $approvalByType = []; // key: approvaltype值, value: inserttime
     foreach ($approvalList as $ai){
       $adata = json_decode($ai['data'],1);
-      $state = isset($adata['state']) ? intval($adata['state']) : 0;
-      if ($state && !isset($approvalByState[$state])){
-        $approvalByState[$state] = $ai['inserttime'];
+      $approvalType = isset($adata['approvaltype']) ? intval($adata['approvaltype']) : 0;
+      if ($approvalType && !isset($approvalByType[$approvalType])){
+        $approvalByType[$approvalType] = $ai['inserttime'];
       }
     }
 
@@ -1854,17 +1855,12 @@ class BudgetController extends ApiBase{
     $currentState = intval($project['state']);
     $submitDate = $project['submitdate'] ?? null;
 
-    // 阶段配置：只显示有记录的阶段，提交计量(4/5)合并为一个
+    // 阶段配置：只显示有记录的阶段
     $stageConfig = [];
-    $hasState1 = isset($approvalByState[1]);
-    $hasState2 = isset($approvalByState[2]);
-    $hasState3 = isset($approvalByState[3]);
-    $hasState45 = isset($approvalByState[4]) || isset($approvalByState[5]);
-
-    if ($hasState1) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByState[1]);
-    if ($hasState2) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByState[2]);
-    if ($hasState3) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByState[3]);
-    if ($hasState45) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>isset($approvalByState[4]) ? $approvalByState[4] : (isset($approvalByState[5]) ? $approvalByState[5] : null));
+    if (isset($approvalByType[1])) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByType[1]);
+    if (isset($approvalByType[2])) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByType[2]);
+    if (isset($approvalByType[3])) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByType[3]);
+    if (isset($approvalByType[4])) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>$approvalByType[4]);
 
     // 组装时间轴
     $timeline = [];
