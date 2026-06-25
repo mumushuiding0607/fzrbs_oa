@@ -3,17 +3,18 @@ import { Card, Tooltip } from 'antd';
 import { getprohistory, getprojectbyid } from './service';
 
 const STAGES = [
-  { key: 'start',  label: '立项', state: 1 },
-  { key: 'budget', label: '执行', state: 2 },
-  { key: 'final',  label: '验收', state: 3 },
-  { key: 'submit',  label: '决算', state: [4, 5] },
-  { key: 'archive', label: '归档', state: 'locked' },
+  { key: 'start',   label: '立项',      state: 1 },
+  { key: 'budget',  label: '预算',      state: 2 },
+  { key: 'final',   label: '决算',      state: 3 },
+  { key: 'submit',  label: '提交计量',   state: [4, 5] },
+  { key: 'archive', label: '归档',      state: 'locked' },
 ];
 
 interface TimelineStage {
   key: string;
   label: string;
   enterTime: string | null;
+  endTime: string | null;
   durationDays: number | null;
   isCurrent: boolean;
   isFinished: boolean;
@@ -37,18 +38,19 @@ interface ProjectInfo {
 const TimelineCard: React.FC<{
   label: string;
   enterTime: string | null;
+  endTime: string | null;
   durationDays: number | null;
   isCurrent: boolean;
   isFinished: boolean;
-}> = ({ label, enterTime, durationDays, isCurrent, isFinished }) => {
+}> = ({ label, enterTime, endTime, durationDays, isCurrent, isFinished }) => {
   const isReached = enterTime !== null;
 
   return (
-    <Tooltip title={isReached ? `进入时间: ${enterTime}` : '未到达此阶段'}>
+    <Tooltip title={isReached ? `进入: ${enterTime}` : '未到达此阶段'}>
       <Card
         size="small"
         style={{
-          width: 120,
+          width: 140,
           textAlign: 'center',
           borderColor: isCurrent ? undefined : isReached ? '#d9d9d9' : '#d9d9d9',
           borderStyle: isReached ? 'solid' : 'dashed',
@@ -58,11 +60,14 @@ const TimelineCard: React.FC<{
         bodyStyle={{ padding: 12 }}
       >
         <div style={{ fontWeight: 'bold', marginBottom: 8 }}>{label}</div>
-        <div style={{ fontSize: 12, marginBottom: 4 }}>
-          {enterTime ? enterTime.slice(0, 10) : '—'}
+        <div style={{ fontSize: 12, marginBottom: 2 }}>
+          {isCurrent ? '进行中' : isFinished ? '已完成' : '—'}
         </div>
-        <div style={{ fontSize: 12 }}>
-          {isCurrent ? '进行中' : durationDays !== null ? `${durationDays}天` : '—'}
+        <div style={{ fontSize: 11, color: isCurrent ? '#fff' : '#999', marginBottom: 2 }}>
+          进入: {enterTime ? enterTime.slice(0, 10) : '—'}
+        </div>
+        <div style={{ fontSize: 11, color: isCurrent ? '#fff' : '#999' }}>
+          结束: {endTime ? endTime.slice(0, 10) : (isCurrent ? '—' : '—')}
         </div>
       </Card>
     </Tooltip>
@@ -107,6 +112,7 @@ const ProjectTimeline: React.FC<{ projectId: number | string }> = ({ projectId }
 
       STAGES.forEach((stage, idx) => {
         let enterTime: string | null = null;
+        let endTime: string | null = null;
         let isFinished = false;
         let isCurrent = false;
         let isArchived = false;
@@ -116,42 +122,39 @@ const ProjectTimeline: React.FC<{ projectId: number | string }> = ({ projectId }
           enterTime = isArchived ? (project.lockdate || null) : null;
           isCurrent = false;
           isFinished = isArchived;
+          endTime = null;
         } else {
           const targetState = Array.isArray(stage.state) ? stage.state : [stage.state];
           const matchedItem = historyList.find((h) => targetState.includes(h.state));
           enterTime = matchedItem ? matchedItem.createtime : null;
           isFinished = enterTime !== null && project.state > (Array.isArray(stage.state) ? stage.state[0] : stage.state);
           isCurrent = currentState === (Array.isArray(stage.state) ? stage.state[0] : stage.state);
+
+          // 计算结束时间 = 下一阶段的进入时间
+          const nextStage = STAGES[idx + 1];
+          if (nextStage) {
+            if (nextStage.key === 'archive' && project.locked === 1) {
+              endTime = project.lockdate || null;
+            } else {
+              const nextState = Array.isArray(nextStage.state) ? nextStage.state : [nextStage.state];
+              const nextItem = historyList.find((h) => nextState.includes(h.state));
+              endTime = nextItem ? nextItem.createtime : null;
+            }
+          } else if (isFinished) {
+            // 最后一个已完成的阶段，结束时间用当前时间
+            endTime = new Date().toISOString();
+          }
         }
 
         // 计算耗时
         let durationDays: number | null = null;
-        if (enterTime) {
-          const nextStage = STAGES[idx + 1];
-          let nextEnterTime: Date | null = null;
-
-          if (nextStage && nextStage.key === 'archive' && project.locked === 1) {
-            nextEnterTime = project.lockdate ? new Date(project.lockdate) : null;
-          } else if (nextStage) {
-            const nextState = Array.isArray(nextStage.state) ? nextStage.state : [nextStage.state];
-            const nextItem = historyList.find((h) => nextState.includes(h.state));
-            nextEnterTime = nextItem ? new Date(nextItem.createtime) : null;
-          } else {
-            // 最后一个阶段，用当前时间
-            nextEnterTime = new Date();
-          }
-
-          if (nextEnterTime) {
-            const start = new Date(enterTime);
-            durationDays = Math.ceil((nextEnterTime.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-          }
-
-          if (isCurrent) {
-            durationDays = null; // 进行中不显示天数
-          }
+        if (enterTime && endTime) {
+          const start = new Date(enterTime);
+          const end = new Date(endTime);
+          durationDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
         }
 
-        data[stage.key] = { key: stage.key, label: stage.label, enterTime, durationDays, isCurrent, isFinished, isArchived };
+        data[stage.key] = { key: stage.key, label: stage.label, enterTime, endTime, durationDays, isCurrent, isFinished, isArchived };
       });
 
       setTimelineData(data);
