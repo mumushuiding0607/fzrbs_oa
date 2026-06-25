@@ -1817,7 +1817,25 @@ class BudgetController extends ApiBase{
       return array('errorMessage'=>'项目不存在');
     }
 
-    // 查询该项目所有相关的 approval_info 记录
+    // 查询 history 记录获取各阶段的结束时间
+    // history.state = 审批结束时项目的状态 = approvaltype
+    $historyList = FzrbsBudgetHistory::find()
+      ->select('state, createtime')
+      ->where(['=','projectid',$projectid])
+      ->orderBy('createtime asc')
+      ->asArray()->all();
+
+    // 按 state 建立映射：key=approvaltype, value=结束时间(createtime)
+    $historyByType = []; // key: approvaltype(=history.state), value: createtime
+    foreach ($historyList as $h){
+      $t = intval($h['state']);
+      if ($t && !isset($historyByType[$t])){
+        $historyByType[$t] = $h['createtime'];
+      }
+    }
+
+    // 查询 approval_info 获取各阶段的开始时间
+    // approval_info.data.approvaltype = 开始的审批类型
     $approvalList = [];
     $thirdNo = $project['thirdno'];
 
@@ -1840,9 +1858,8 @@ class BudgetController extends ApiBase{
       ])->queryAll();
     }
 
-    // 解析每个 approval_info，按 approvaltype 建立映射
-    // approvaltype: 1=立项, 2=预算, 3=决算, 4=提交计量
-    $approvalByType = []; // key: approvaltype值, value: inserttime
+    // 按 approvaltype 建立映射：key=approvaltype, value=开始时间(inserttime)
+    $approvalByType = []; // key: approvaltype, value: inserttime
     foreach ($approvalList as $ai){
       $adata = json_decode($ai['data'],1);
       $approvalType = isset($adata['approvaltype']) ? intval($adata['approvaltype']) : 0;
@@ -1856,29 +1873,18 @@ class BudgetController extends ApiBase{
     $submitDate = $project['submitdate'] ?? null;
 
     // 阶段配置：只显示有记录的阶段
+    // approvaltype: 1=立项, 2=预算, 3=决算, 4=提交计量
     $stageConfig = [];
-    if (isset($approvalByType[1])) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByType[1]);
-    if (isset($approvalByType[2])) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByType[2]);
-    if (isset($approvalByType[3])) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByType[3]);
-    if (isset($approvalByType[4])) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>$approvalByType[4]);
+    if (isset($approvalByType[1])) $stageConfig[] = array('key'=>'start', 'label'=>'立项', 'state'=>1, 'enterTime'=>$approvalByType[1], 'endTime'=>$historyByType[1] ?? null);
+    if (isset($approvalByType[2])) $stageConfig[] = array('key'=>'budget', 'label'=>'预算', 'state'=>2, 'enterTime'=>$approvalByType[2], 'endTime'=>$historyByType[2] ?? null);
+    if (isset($approvalByType[3])) $stageConfig[] = array('key'=>'final', 'label'=>'决算', 'state'=>3, 'enterTime'=>$approvalByType[3], 'endTime'=>$historyByType[3] ?? null);
+    if (isset($approvalByType[4])) $stageConfig[] = array('key'=>'submit', 'label'=>'提交计量', 'state'=>4, 'enterTime'=>$approvalByType[4], 'endTime'=>$submitDate);
 
     // 组装时间轴
     $timeline = [];
-    foreach ($stageConfig as $idx => $stage){
+    foreach ($stageConfig as $stage){
       $enterTime = $stage['enterTime'];
-
-      // 结束时间
-      $endTime = null;
-      if ($stage['key'] === 'submit'){
-        // 提交计量的结束时间是 submitdate
-        $endTime = $submitDate;
-      } else {
-        // 其他阶段的结束时间是下一审批阶段的进入时间
-        $nextStage = isset($stageConfig[$idx + 1]) ? $stageConfig[$idx + 1] : null;
-        if ($nextStage){
-          $endTime = $nextStage['enterTime'];
-        }
-      }
+      $endTime = $stage['endTime'];
 
       $isCurrent = ($currentState == $stage['state']);
       $isFinished = ($currentState > $stage['state']);
