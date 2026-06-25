@@ -1845,17 +1845,19 @@ class BudgetController extends ApiBase{
       ])->queryAll();
     }
 
-    // 解析每个 approval_info 的 data JSON，提取 approvaltype
-    $approvalByType = []; // key: approvaltype, value: inserttime
+    // 解析每个 approval_info，按插入顺序建立阶段时间映射
+    // approval_info.data.state = 项目当前状态
+    // approval_info.data.approvaltype = 审批类型
+    $approvalByState = []; // key: state值, value: ['enterTime'=>inserttime, 'approvalType'=>...]
     foreach ($approvalList as $ai){
       $adata = json_decode($ai['data'],1);
-      $approvalType = isset($adata['approvaltype']) ? intval($adata['approvaltype']) : 0;
-      if ($approvalType && !isset($approvalByType[$approvalType])){
-        $approvalByType[$approvalType] = $ai['inserttime'];
+      $state = isset($adata['state']) ? intval($adata['state']) : 0;
+      if ($state && !isset($approvalByState[$state])){
+        $approvalByState[$state] = $ai['inserttime'];
       }
     }
 
-    // 按 state 分组获取进入时间（从 approval_info.inserttime）
+    // 按时间顺序排列的阶段列表，用于计算结束时间
     $stateEnterTime = []; // key: state(1-5), value: inserttime
     $stateLabels = [
       1 => '立项',
@@ -1865,25 +1867,33 @@ class BudgetController extends ApiBase{
       5 => '提交计量',
     ];
     foreach ([1,2,3,4,5] as $s){
-      if (isset($approvalByType[$s])){
-        $stateEnterTime[$s] = $approvalByType[$s];
+      if (isset($approvalByState[$s])){
+        $stateEnterTime[$s] = $approvalByState[$s];
       }
     }
 
     // 当前项目状态
     $currentState = intval($project['state']);
 
-    // 组装时间轴数据
+    // 按 state 顺序组装时间轴，但结束时间用实际的时间顺序
+    // 先按时间顺序排列各阶段的进入时间
+    $sortedEnterTimes = $stateEnterTime;
+    asort($sortedEnterTimes); // 按时间升序
+
     $timeline = [];
     $states = [1, 2, 3, 4, 5];
-    foreach ($states as $idx => $state){
+    foreach ($states as $state){
       $enterTime = $stateEnterTime[$state] ?? null;
 
-      // 结束时间 = 下一 state 的进入时间
+      // 结束时间 = 下一个更晚的时间点
       $endTime = null;
-      $nextState = isset($states[$idx + 1]) ? $states[$idx + 1] : null;
-      if ($nextState && isset($stateEnterTime[$nextState])){
-        $endTime = $stateEnterTime[$nextState];
+      if ($enterTime){
+        foreach ($sortedEnterTimes as $s => $t){
+          if ($t > $enterTime){
+            $endTime = $t;
+            break;
+          }
+        }
       }
 
       $isCurrent = ($currentState == $state);
@@ -1908,7 +1918,6 @@ class BudgetController extends ApiBase{
         'durationDays' => $durationDays,
         'isCurrent' => $isCurrent,
         'isFinished' => $isFinished,
-        'isArchived' => false,
       );
     }
 
