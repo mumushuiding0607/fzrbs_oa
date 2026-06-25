@@ -1779,10 +1779,26 @@ class BudgetController extends ApiBase{
     $this->_result["offset"] = $offset;
     $this->_result["total"] = $total;
     if ($res){
-      $res = array_map(function($item){
+      // 批量查询所有涉及的 thirdNo 对应的 approval_info inserttime
+      $thirdNos = array_filter(array_unique(array_map(function($item){
+        $d = json_decode($item['data'],1);
+        return isset($d['thirdno']) ? $d['thirdno'] : null;
+      },$res)));
+      $approvalMap = [];
+      if ($thirdNos){
+        $approvalInfos = WeixinOaApprovalInfo::find()->select('thirdNo,inserttime')->where(['and',['in','thirdNo',$thirdNos],['agentId'=>$this->agentId]])->asArray()->all();
+        foreach ($approvalInfos as $ai){
+          $approvalMap[$ai['thirdNo']] = $ai['inserttime'];
+        }
+      }
+      $res = array_map(function($item) use($approvalMap){
         $ele = json_decode($item['data'],1);
         $ele['statename']=$item['statename'];
         $ele['createtime']=$item['createtime'];
+        // approval_info.inserttime 作为节点开始时间
+        $ele['approvalInserttime'] = isset($ele['thirdno']) && isset($approvalMap[$ele['thirdno']]) ? $approvalMap[$ele['thirdno']] : null;
+        // project.inserttime 作为节点结束时间
+        $ele['projectInserttime'] = isset($ele['inserttime']) ? $ele['inserttime'] : null;
         return $ele;
       },$res);
     }

@@ -26,6 +26,8 @@ interface HistoryItem {
   createtime: string;
   statename: string;
   data: string;
+  approvalInserttime: string | null;
+  projectInserttime: string | null;
 }
 
 interface ProjectInfo {
@@ -126,23 +128,27 @@ const ProjectTimeline: React.FC<{ projectId: number | string }> = ({ projectId }
         } else {
           const targetState = Array.isArray(stage.state) ? stage.state : [stage.state];
           const matchedItem = historyList.find((h) => targetState.includes(h.state));
-          enterTime = matchedItem ? matchedItem.createtime : null;
+          // 开始时间：approval_info.inserttime
+          enterTime = matchedItem ? (matchedItem.approvalInserttime || matchedItem.projectInserttime || null) : null;
+          // 结束时间：project.inserttime
+          endTime = matchedItem ? (matchedItem.projectInserttime || null) : null;
           isFinished = enterTime !== null && project.state > (Array.isArray(stage.state) ? stage.state[0] : stage.state);
           isCurrent = currentState === (Array.isArray(stage.state) ? stage.state[0] : stage.state);
 
-          // 计算结束时间 = 下一阶段的进入时间
-          const nextStage = STAGES[idx + 1];
-          if (nextStage) {
-            if (nextStage.key === 'archive' && project.locked === 1) {
-              endTime = project.lockdate || null;
-            } else {
-              const nextState = Array.isArray(nextStage.state) ? nextStage.state : [nextStage.state];
-              const nextItem = historyList.find((h) => nextState.includes(h.state));
-              endTime = nextItem ? nextItem.createtime : null;
+          // 如果没有结束时间，用下一阶段的开始时间
+          if (!endTime) {
+            const nextStage = STAGES[idx + 1];
+            if (nextStage) {
+              if (nextStage.key === 'archive' && project.locked === 1) {
+                endTime = project.lockdate || null;
+              } else {
+                const nextState = Array.isArray(nextStage.state) ? nextStage.state : [nextStage.state];
+                const nextItem = historyList.find((h) => nextState.includes(h.state));
+                endTime = nextItem ? (nextItem.approvalInserttime || nextItem.projectInserttime || null) : null;
+              }
+            } else if (isFinished) {
+              endTime = new Date().toISOString();
             }
-          } else if (isFinished) {
-            // 最后一个已完成的阶段，结束时间用当前时间
-            endTime = new Date().toISOString();
           }
         }
 
