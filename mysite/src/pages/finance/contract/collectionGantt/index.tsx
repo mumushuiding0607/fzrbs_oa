@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Col, Empty, Progress, Row, Spin, Statistic } from 'antd';
+import { Card, Col, Divider, Empty, Progress, Row, Spin } from 'antd';
 import moment from 'moment';
 import { getContractGantt, ContractGanttData } from './service';
 import {
@@ -12,9 +12,12 @@ import { CollectionGanttProps, COLORS } from './types';
 
 type DashboardStatus = 'green' | 'yellow' | 'red';
 
+const fmtAmount = (n: number) =>
+  n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const CollectionGantt: React.FC<CollectionGanttProps> = ({
   contractId,
-  height = 360,
+  height = 200,
   compact = false,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -92,7 +95,7 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
 
   if (loading) {
     return (
-      <Card>
+      <Card size="small">
         <div style={{ textAlign: 'center', padding: 40 }}>
           <Spin /> 加载中...
         </div>
@@ -101,141 +104,136 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
   }
   if (error) {
     return (
-      <Card>
+      <Card size="small">
         <div style={{ color: COLORS.OVERDUE, padding: 20 }}>{error}</div>
       </Card>
     );
   }
-  if (!data) return <Card><Empty description="暂无数据" /></Card>;
+  if (!data) return <Card size="small"><Empty description="暂无数据" /></Card>;
 
   const hasPlan = planSeries.length > 0;
   const hasActual = actualSeries.length > 0;
   if (!hasPlan && !hasActual) {
-    return <Card><Empty description="暂无回款数据" /></Card>;
+    return <Card size="small"><Empty description="暂无回款数据" /></Card>;
   }
+
+  // 渲染一条进度条行：label 在左，bar 在中，百分比在右
+  const ProgressRow: React.FC<{
+    label: string;
+    percent: number;
+    color: string;
+  }> = ({ label, percent, color }) => (
+    <Row align="middle" gutter={12} style={{ marginBottom: 8 }}>
+      <Col style={{ width: 72, flexShrink: 0 }}>
+        <span style={{ color: '#666', fontSize: 13 }}>{label}</span>
+      </Col>
+      <Col style={{ flex: 1 }}>
+        <Progress
+          percent={Math.round(percent)}
+          strokeColor={color}
+          showInfo={false}
+          strokeLinecap="round"
+        />
+      </Col>
+      <Col style={{ width: 56, textAlign: 'right', flexShrink: 0 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color }}>{Math.round(percent)}%</span>
+      </Col>
+    </Row>
+  );
 
   return (
     <Card
-      title="合同收款进度"
+      title={<span style={{ fontSize: 14, fontWeight: 600 }}>合同收款进度</span>}
       size="small"
+      bodyStyle={{ padding: '16px 20px' }}
       extra={
-        <span style={{ fontSize: 13 }}>
+        <span style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center' }}>
           <span
             style={{
               display: 'inline-block',
-              width: 10,
-              height: 10,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               background: statusColor,
               marginRight: 6,
-              verticalAlign: 'middle',
             }}
           />
-          {statusText}
+          <span style={{ color: statusColor, fontWeight: 600 }}>{statusText}</span>
         </span>
       }
     >
-      <Row gutter={24} align="middle">
-        <Col span={10} style={{ textAlign: 'center' }}>
-          <Progress
-            type="dashboard"
-            percent={Math.round(actualRate)}
-            strokeColor={statusColor}
-            trailColor="rgba(0, 0, 0, 0.06)"
-            strokeWidth={10}
-            style={{ height }}
-          />
+      {/* 顶部：仪表盘 + 数字 + 期次状态 */}
+      <Row gutter={16} align="middle">
+        <Col style={{ width: 200, flexShrink: 0 }}>
+          <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Progress
+              type="dashboard"
+              percent={Math.round(actualRate)}
+              strokeColor={statusColor}
+              trailColor="rgba(0, 0, 0, 0.06)"
+              strokeWidth={8}
+              style={{ width: 160 }}
+            />
+          </div>
         </Col>
-        <Col span={14}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Statistic
-                title="已收"
-                value={data.contract.paycollection}
-                prefix="¥"
-                precision={2}
-                valueStyle={{ color: COLORS.EARLY, fontSize: 20, fontWeight: 'bold' }}
-              />
-            </Col>
-            <Col span={12}>
-              <Statistic
-                title="还欠"
-                value={remaining}
-                prefix="¥"
-                precision={2}
-                valueStyle={{ color: '#666', fontSize: 20, fontWeight: 'bold' }}
-              />
-            </Col>
-          </Row>
-          <div style={{ marginTop: 24 }}>
-            {hasPlan && (
-              <div style={{ marginBottom: 16 }}>
-                <span style={{ marginRight: 8, color: '#666', fontSize: 13 }}>计划进度</span>
-                <Progress
-                  percent={Math.round(planRate)}
-                  strokeColor={COLORS.PENDING}
-                  format={(p) => `${p}%（节点 ${planSeries.length}）`}
-                />
-              </div>
-            )}
+        <Col style={{ flex: 1 }}>
+          <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
             <div>
-              <span style={{ marginRight: 8, color: '#666', fontSize: 13 }}>实际进度</span>
-              <Progress
-                percent={Math.round(actualRate)}
-                strokeColor={statusColor}
-                format={(p) => `${p}%`}
-              />
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>已收</div>
+              <div style={{ fontSize: 22, fontWeight: 600, color: COLORS.EARLY, lineHeight: 1.2 }}>
+                ¥{fmtAmount(data.contract.paycollection)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>还欠</div>
+              <div style={{ fontSize: 22, fontWeight: 600, color: '#595959', lineHeight: 1.2 }}>
+                ¥{fmtAmount(remaining)}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>总额</div>
+              <div style={{ fontSize: 22, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
+                ¥{fmtAmount(data.contract.amount)}
+              </div>
             </div>
           </div>
+          {!compact && (
+            <div style={{ marginTop: 12, fontSize: 13, color: '#595959' }}>
+              <span style={{ marginRight: 16 }}>
+                <span style={{ color: '#999' }}>提前 </span>
+                <span style={{ color: earlyCount > 0 ? COLORS.EARLY : '#bfbfbf', fontWeight: 600 }}>
+                  {earlyCount}
+                </span>
+                <span style={{ color: '#999' }}> 期</span>
+              </span>
+              <span style={{ marginRight: 16 }}>
+                <span style={{ color: '#999' }}>逾期 </span>
+                <span style={{ color: overdueCount > 0 ? COLORS.OVERDUE : '#bfbfbf', fontWeight: 600 }}>
+                  {overdueCount}
+                </span>
+                <span style={{ color: '#999' }}> 期</span>
+              </span>
+              <span>
+                <span style={{ color: '#999' }}>待收 </span>
+                <span style={{ color: pendingCount > 0 ? COLORS.PENDING : '#bfbfbf', fontWeight: 600 }}>
+                  {pendingCount}
+                </span>
+                <span style={{ color: '#999' }}> 期</span>
+              </span>
+            </div>
+          )}
         </Col>
       </Row>
 
-      {!compact && (
-        <Row gutter={16} style={{ marginTop: 24 }}>
-          <Col span={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, lineHeight: 1.2 }}>😊</div>
-              <div
-                style={{
-                  color: earlyCount > 0 ? COLORS.EARLY : '#999',
-                  fontWeight: 'bold',
-                  marginTop: 4,
-                }}
-              >
-                提前 {earlyCount} 期
-              </div>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, lineHeight: 1.2 }}>⚠️</div>
-              <div
-                style={{
-                  color: overdueCount > 0 ? COLORS.OVERDUE : '#999',
-                  fontWeight: 'bold',
-                  marginTop: 4,
-                }}
-              >
-                逾期 {overdueCount} 期
-              </div>
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, lineHeight: 1.2 }}>○</div>
-              <div
-                style={{
-                  color: pendingCount > 0 ? COLORS.PENDING : '#999',
-                  fontWeight: 'bold',
-                  marginTop: 4,
-                }}
-              >
-                待收 {pendingCount} 期
-              </div>
-            </Card>
-          </Col>
-        </Row>
-      )}
+      <Divider style={{ margin: '12px 0' }} />
+
+      {/* 底部：进度条 */}
+      <div>
+        {hasPlan && (
+          <ProgressRow label="计划进度" percent={planRate} color={COLORS.PENDING} />
+        )}
+        <ProgressRow label="实际进度" percent={actualRate} color={statusColor} />
+      </div>
     </Card>
   );
 };
