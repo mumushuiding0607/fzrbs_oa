@@ -176,7 +176,7 @@ return ['ret' => 1];
 | 文件 | 改动 |
 |------|------|
 | `mysite/src/pages/finance/Flowtemplate/service.ts` | 新增 `addsigner()` API 函数 |
-| `mysite/src/pages/finance/Flowtemplate/viewflow.tsx` | 在现有「修改审批人」弹窗加「加签 / 转交」模式切换 |
+| `mysite/src/pages/finance/Flowtemplate/viewflow.tsx` | 弹窗加「转交 / 加签」模式切换（替换原单选项「修改审批人」） |
 
 ### 5.2 service.ts 新增
 
@@ -239,7 +239,7 @@ onAlterApprover={(item, index, idx) => {
   api(params).then((res: any) => {
     if (res.errorMessage) Modal.error({ title: res.errorMessage });
     else {
-      setAlterMode('transfer');   // 重置回默认「修改审批人」
+      setAlterMode('transfer');   // 重置回默认「转交」
       getflowdata({ thirdNo: data.thirdNo }).then(setData);
     }
   });
