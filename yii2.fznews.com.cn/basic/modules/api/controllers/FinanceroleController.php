@@ -1219,6 +1219,104 @@ class FinanceroleController extends ApiBase{
     $transaction->commit();
     return array('ret'=>1);
   }
+  public function actionAddsigner(){
+    $thirdNo = $this->_request['thirdNo'];
+    $step = $this->_request['step'];
+    $userid = $this->_request['userid'];
+    $agentid = $this->_request['agentid'];
+
+    if (!$agentid){
+      return array('errorMessage'=>'agentid 不能为空');
+    }
+    if (!$userid){
+      return array('errorMessage'=>"userid 不能为空");
+    }
+    if (!$thirdNo){
+      return array('errorMessage'=>'thirdNo 不能为空');
+    }
+    if (!isset($step) && $step !== '0'){
+      return array('errorMessage'=>'step 不能为空');
+    }
+
+    $user = $this->getUserinfo($userid);
+    if (!$user){
+      return array('errorMessage'=>'userid：['.$userid.']不存在');
+    }
+
+    switch ($agentid) {
+      case 1000063:
+        $data = FznewsFlowProcess::find()->where(['and',['=','processInstanceId',$thirdNo]])->one();
+        break;
+      case 1000066:
+        $data = WeixinFinanceInfo::find()->where(['and',['=','thirdNo',$thirdNo]])->one();
+        break;
+      default:
+        $data = WeixinOaApprovalInfo::find()->where(['and',['=','thirdNo',$thirdNo]])->one();
+        break;
+    }
+    if (!$data){
+      return array('errorMessage'=>'无此单号');
+    }
+
+    $hasauth = $this->hasRole('流程设置','');
+    if (!$hasauth) {
+      return array('errorMessage'=>'需要【流程设置】角色');
+    }
+
+    $flow = WeixinOaApprovaldata::find()->where(['agentid'=>$agentid,'thirdNo'=>$thirdNo])->one();
+    if (!$flow){
+      return array('errorMessage'=>'流程数据不存在');
+    }
+    $flowdata = json_decode($flow['data'],true);
+    $curstep = intval($flow['step']);
+    $nodes = &$flowdata['data']['ApprovalNodes']['ApprovalNode'];
+
+    // step 范围校验
+    if (intval($step) < $curstep) {
+      return array('errorMessage'=>'只能在当前或之后的审批节点加签');
+    }
+    if (intval($step) >= count($nodes)) {
+      return array('errorMessage'=>'step 超出范围');
+    }
+
+    $curuser = $this->getUserinfo($this->_adminInfo['wxuserid']);
+
+    $newNode = array(
+      'NodeType'   => 0,
+      'NodeAttr'   => 1,
+      'NodeStatus' => 1,
+      'Items' => array('Item' => array(array(
+        'ItemName'    => $user['name'],
+        'ItemParty'   => '',
+        'ItemImage'   => $user['avatar'],
+        'ItemUserId'  => $user['userid'],
+        'ItemStatus'  => 1,
+        'ItemSpeech'  => '',
+        'ItemOpTime'  => 0,
+      ))),
+      'FromUserid'   => $curuser['userid'],
+      'FromUsername' => $curuser['name'],
+    );
+
+    array_splice($nodes, intval($step) + 1, 0, array($newNode));
+
+    $flowdata['data']['ApprovalNodes']['ApprovalNode'] = $nodes;
+    $flow->data = json_encode($flowdata);
+
+    $transaction = Yii::$app->db->beginTransaction();
+    try {
+      $flow->save();
+      // 注意：不更新 $data->approvalUserid。
+      // 加签节点在原 curstep 之后插入；原审批人继续审批直至通过，
+      // 通过后 flowChange 自然将 step 推进到新加签节点。
+    } catch (\Throwable $th) {
+      $transaction->rollBack();
+      return array('errorMessage'=> $th->getMessage());
+    }
+    $transaction->commit();
+
+    return array('ret'=>1);
+  }
   public function actionAlterspeech(){
     $thirdNo = $this->_request['thirdNo'];
 		$step = $this->_request['step'];
