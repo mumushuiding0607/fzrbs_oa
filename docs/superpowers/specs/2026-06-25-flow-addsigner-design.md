@@ -140,14 +140,9 @@ $flow->data = json_encode($flowdata);
 $transaction = Yii::$app->db->beginTransaction();
 try {
   $flow->save();
-
-  // 如果加签的恰好是当前审批节点，转移当前审批人到加签人
-  if ($step == $curstep) {
-    $data->approvalUserid = $user['userid'];
-    $data->approvalUsername = $user['name'];
-    $data->status = 1;
-    $data->save();
-  }
+  // 注意：即使 $step == $curstep 也不更新 approvalUserid。
+  // 加签节点在原节点之后插入，原节点（curstep）仍由原审批人继续审批；
+  // 原审批人通过后，flowChange 自然将 step 推进到新加签节点。
 } catch (\Throwable $th) {
   $transaction->rollBack();
   return ['errorMessage' => $th->getMessage()];
@@ -161,7 +156,7 @@ return ['ret' => 1];
 - `array_splice` 插入新节点，原 `step` 之后的所有节点索引自动 +1
 - 加签节点默认 `NodeAttr=1`（或签）。如果业务需要会签（`NodeAttr=2`），后续可加参数
 - **不**调用 `send()` 通知企业微信（按需求）
-- 如果加签的恰好是当前审批节点（`$step == $curstep`），更新 `WeixinOaApprovalInfo.approvalUserid` 指向新加签人
+- **不**修改 `WeixinOaApprovalInfo.approvalUserid`——加签节点在原节点之后，原审批人继续审批直至通过；通过后 `flowChange` 自然推进 step 到新节点
 
 ### 4.5 与 `actionFlowalter` 的对比
 
@@ -170,7 +165,7 @@ return ['ret' => 1];
 | 操作 | 替换节点 | 插入节点 |
 | 数据变更 | `$nodes[$step]['Items']['Item'] = [$newItem]` | `array_splice($nodes, $step+1, 0, [$newNode])` |
 | 原节点状态 | **被替换**（清空后重写） | **保持不变** |
-| flow.step 调整 | 仅当 `step==curstep` 时更新 approvalUserid | 仅当 `step==curstep` 时更新 approvalUserid |
+| flow.step 调整 | 仅当 `step==curstep` 时更新 approvalUserid | **不调整**（加签节点在原节点之后，curstep 保持指向原节点；原审批人继续审批，审批完后自动进入新加签节点） |
 | 后续节点索引 | 不变 | +1 |
 
 ## 5. 前端设计 — `viewflow.tsx`
@@ -273,9 +268,8 @@ onAlterApprover={(item, index, idx) => {
   6. 加载 flow JSON
   7. step 范围校验（≥ curstep）
   8. array_splice 插入新节点
-  9. 事务保存：
-     - WeixinOaApprovaldata.save()
-     - 如果 step == curstep：WeixinOaApprovalInfo.updateAll(approvalUserid = 新加签人)
+  9. 事务保存：WeixinOaApprovaldata.save()
+     （**不**更新 WeixinOaApprovalInfo.approvalUserid——加签节点在原 curstep 之后）
   10. 返回 {ret:1}
      ↓
 [viewflow.tsx]
@@ -296,7 +290,7 @@ onAlterApprover={(item, index, idx) => {
 
 ## 8. 测试场景（手动）
 
-1. **基线单步加签**：3 步流程（张三→李四→王五），当前 step=0，在步骤 0 后加签赵六 → 验证流程变为「张三→赵六→李四→王五」，赵六为当前审批人
+1. **基线单步加签**：3 步流程（张三→李四→王五），当前 step=0（张三审批中），在步骤 0 后加签赵六 → 验证流程变为「张三→赵六→李四→王五」，张三仍为当前审批人（赵六为下一步）
 2. **未来步骤加签**：同上流程，当前 step=0，在步骤 1 后加签赵六 → 验证流程变为「张三→李四→赵六→王五」
 3. **最后一步加签**：在步骤 2（王五）后加签 → 验证流程变为「张三→李四→王五→赵六」
 4. **权限拦截**：非「流程设置」角色调用 → 应返回权限错误
@@ -308,7 +302,7 @@ onAlterApprover={(item, index, idx) => {
 
 1. **`array_splice` 是核心**：PHP 的 `array_splice($arr, $offset, $length, $replacement)` 在 `$offset` 后插入 `$replacement` 数组，原数组元素后移。
 2. **JSON 字段直接读写**：所有变更在内存中完成，一次性 `json_encode` 写回。
-3. **状态机一致性**：`WeixinOaApprovalInfo.approvalUserid` 必须与 `flow.step` 指向的节点的 `Items.Item[0].ItemUserId` 一致——后端在 `step==curstep` 时同步更新。
+3. **状态机一致性**：`WeixinOaApprovalInfo.approvalUserid` 必须与 `flow.step` 指向的节点的 `Items.Item[0].ItemUserId` 一致。加签**不**改变 curstep 指向，所以**不**需要更新 `approvalUserid`——原审批人继续审批。
 4. **前端模式状态**：避免加签/转交混淆，每次操作成功后重置为 `transfer`。
 
 ## 10. 不在范围内（后续可选）
