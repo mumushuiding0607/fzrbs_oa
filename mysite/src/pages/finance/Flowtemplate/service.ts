@@ -298,6 +298,14 @@ export async function flowalteritem(
     params:{...params}
   })
 }
+export async function addsigner(
+  params:any
+){
+  return request<{errorMessage:string,ret?:number}>('/api/financerole/addsigner',{
+    method: 'GET',
+    params:{...params}
+  })
+}
 export async function gettag(
   params:{}
 ){
