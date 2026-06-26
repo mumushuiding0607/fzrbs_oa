@@ -1,8 +1,8 @@
 
-import { Button, Input, Modal } from "antd";
+import { Button, Input, Modal, Radio } from "antd";
 
 import { useEffect, useRef, useState } from "react";
-import { flowalter, flowalteritem, flowback, getflowdata } from "./service";
+import { addsigner, flowalter, flowalteritem, flowback, getflowdata } from "./service";
 import Flow from "../budget/budget/flow";
 import AppSelect from "./AppSelect";
 import UserAutocomplete from "../budget/common/userAutocomplete";
@@ -24,6 +24,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
   const [roowSelect,setRowSelect]=useState<any>({})
   const [agentid,setAgentid]=useState<any>()
   const [searchValue,setSearchValue]=useState(thirdNo||'')
+  const [alterMode, setAlterMode] = useState<'transfer' | 'addsigner'>('transfer');
 
   useEffect(()=>{
     setShowModal(visible)
@@ -90,10 +91,29 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
           setItemSelect(0)
           setRowSelect(item)
         }} onAlterApprover={(item:any,index:any,idx:any)=>{
-          setStepSelect(index)
-          setItemSelect(idx !== undefined ? idx : 0)
-          setRowSelect(item)
-          setShowu(true)
+          // 只允许当前和未来步骤加签（与后端校验一致）
+          if (index < (data.viewdata?.step ?? 0)) {
+            Modal.warning({ title: '已审批节点无法加签' });
+            return;
+          }
+          Modal.confirm({
+            title: '选择操作',
+            content: (
+              <Radio.Group
+                defaultValue="transfer"
+                onChange={(e:any)=>setAlterMode(e.target.value)}
+              >
+                <Radio.Button value="transfer">转交（替换原审批人）</Radio.Button>
+                <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
+              </Radio.Group>
+            ),
+            onOk:()=>{
+              setStepSelect(index)
+              setItemSelect(idx !== undefined ? idx : 0)
+              setRowSelect(item)
+              setShowu(true)
+            }
+          })
         }}></Flow>
         {
           data.viewdata!=0 &&
@@ -141,15 +161,21 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
         footer={null}
       >
         <UserAutocomplete multiple={false} onChange={(e:any)=>{
-          console.log(e)
-          
-          if (e){
-            flowalteritem({thirdNo:data.thirdNo,agentid,step:stepSelect,userid:e.value,itemIndex:itemSelect}).then((res:any)=>{
+          if (!e) return;
+          const isAdd = alterMode === 'addsigner';
+          const api = isAdd ? addsigner : flowalteritem;
+          const params = isAdd
+            ? { thirdNo: data.thirdNo, agentid, step: stepSelect, userid: e.value }
+            : { thirdNo: data.thirdNo, agentid, step: stepSelect,
+                userid: e.value, itemIndex: itemSelect };
+
+          api(params).then((res:any)=>{
             if (res.errorMessage) {
               Modal.error({
                 title: res.errorMessage,
               });
             } else {
+              setAlterMode('transfer');   // 重置回默认「转交」
               getflowdata({thirdNo:data.thirdNo}).then(res=>{
                 if (res.errorMessage){
                   Modal.error({
@@ -161,9 +187,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
                 }
               })
             }
-
           })
-          }
         }
       }/>
       </Modal>
