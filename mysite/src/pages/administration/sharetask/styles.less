@@ -1,0 +1,70 @@
+@import (reference) '~antd/es/style/themes/index';
+
+// 表格
+.stab {
+  :global {
+    .ant-table-cell img {
+      width: 100px;
+      height: 100px;
+    }
+  }
+}
+
+// 查看模块
+.clickTable {
+  width: 1000px !important;
+}
+/* stylelint-disable-next-line no-duplicate-selectors */
+.clickTable {
+  :global {
+    .ant-modal {
+      width: 1200px !important;
+    }
+    .ant-modal-body {
+      background: #e3e3e3;
+    }
+  }
+}
+
+// 编辑表单
+.dfrom {
+  :global {
+    label {
+      display: block;
+      padding: 4px 0;
+      line-height: 30px;
+    }
+    .ant-select {
+      width: 100%;
+      margin: 0 0 24px 0;
+      padding: 0 0;
+    }
+    .stitle {
+      height: 30px;
+    }
+    .colselect {
+      padding: 0;
+    }
+    .ant-form-item {
+      margin-bottom: 0;
+    }
+    div {
+      padding: 0 !important;
+    }
+    .ant-select-selector {
+      padding: 0 4px !important;
+    }
+  }
+}
+
+// 任务统计
+.taskTotalInfo {
+  :global {
+    .ant-card-body {
+      padding: 10px 24px;
+    }
+    .ant-descriptions-small .ant-descriptions-row > td {
+      padding-bottom: 0;
+    }
+  }
+}

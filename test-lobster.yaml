@@ -1,0 +1,16 @@
+name: test-lobster
+description: 极简 Lobster 测试
+
+steps:
+  - id: step1
+    description: "调用 llm-task 执行第一个测试步骤"
+    pipeline: >
+      openclaw.invoke --tool llm-task --action json --args-json
+      '{"input":null,"prompt":"Please output JSON {\"result\": \"步骤1 执行成功\"}","schema":{"type":"object","properties":{"result":{"type":"string"}},"required":["result"]}}'
+
+  - id: step2
+    description: "读取上一步输出，并调用 llm-task 执行第二个测试步骤"
+    pipeline: >
+      openclaw.invoke --tool llm-task --action json --args-json
+      '{"input":null,"prompt":"上一步的输出结果是：$step1.json.result。现在请输出JSON {\"result\": \"步骤2 执行成功，Lobster 工作正常。\"}","schema":{"type":"object","properties":{"result":{"type":"string"}},"required":["result"]}}'
+    stdin: $step1.json

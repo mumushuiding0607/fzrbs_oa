@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<EInvoice>
+    <Header>
+        <EIid>24352000000061410366</EIid>
+        <EInvoiceTag>SWEI3500</EInvoiceTag>
+        <Version>0.32</Version>
+        <InherentLabel>
+            <InIssuType>
+                <LabelCode>Y</LabelCode>
+                <LabelName>是否蓝字发票标志</LabelName>
+            </InIssuType>
+            <EInvoiceType>
+                <LabelCode>01</LabelCode>
+                <LabelName>电子发票</LabelName>
+            </EInvoiceType>
+            <GeneralOrSpecialVAT>
+                <LabelCode>01</LabelCode>
+                <LabelName>增值税专用发票</LabelName>
+            </GeneralOrSpecialVAT>
+            <TaxpayerType>
+                <LabelCode>1</LabelCode>
+                <LabelName>一般纳税人</LabelName>
+            </TaxpayerType>
+        </InherentLabel>
+        <UndefinedLabel>
+            <Label>
+                <LabelType>发票开具方式标签</LabelType>
+                <LabelCode>1</LabelCode>
+                <LabelName>网页开票</LabelName>
+            </Label>
+        </UndefinedLabel>
+    </Header>
+    <EInvoiceData>
+        <SellerInformation>
+            <SellerIdNum>91350102MA328T736G</SellerIdNum>
+            <SellerName>福建时光机传媒有限公司</SellerName>
+            <SellerAddr>福建省福州市鼓楼区洪山镇梅峰路82号蛇山小区（原左海新城12#、13#、14#）1#（原左海新城12#）楼1层10店面-1</SellerAddr>
+            <SellerTelNum>13075813759</SellerTelNum>
+            <SellerBankName>中国建设银行股份有限公司福建省分行</SellerBankName>
+            <SellerBankAccNum>35050100240600001906</SellerBankAccNum>
+        </SellerInformation>
+        <BuyerInformation>
+            <BuyerIdNum>12350100488095065M</BuyerIdNum>
+            <BuyerName>福州日报社</BuyerName>
+            <BuyerTelNum>83762223</BuyerTelNum>
+            <BuyerAddr>福州市鼓楼区小柳路85号</BuyerAddr>
+            <BuyerBankName>工行福州南门支行</BuyerBankName>
+            <BuyerBankAccNum>1402025109008954969</BuyerBankAccNum>
+        </BuyerInformation>
+        <BasicInformation>
+            <TotalAmWithoutTax>23584.91</TotalAmWithoutTax>
+            <TotalTaxAm>1415.09</TotalTaxAm>
+            <TotalTax-includedAmount>25000.00</TotalTax-includedAmount>
+            <TotalTax-includedAmountInChinese>贰万伍仟圆整</TotalTax-includedAmountInChinese>
+            <Drawer>黄庄健</Drawer>
+            <RequestTime>2024-06-13 03:12:38</RequestTime>
+        </BasicInformation>
+        <IssuItemInformation>
+            <ItemName>*广播影视服务*视频制作直播服务费</ItemName>
+            <Amount>23584.91</Amount>
+            <TaxRate>0.06</TaxRate>
+            <ComTaxAm>1415.09</ComTaxAm>
+            <TotaltaxIncludedAmount>25000.00</TotaltaxIncludedAmount>
+            <TaxClassificationCode>3040701040000000000</TaxClassificationCode>
+        </IssuItemInformation>
+        <SpecificInformation/>
+        <AdditionalInformation>
+            <Remark>2023 鼓山汽车直播嘉年华暨
+采购项目 立项时间 2023年10月金秋汽车文化节网络直播及活动快剪项目</Remark>
+        </AdditionalInformation>
+    </EInvoiceData>
+    <SellerAuthentication>
+        <AuthenticationMethods>01</AuthenticationMethods>
+    </SellerAuthentication>
+    <TaxSupervisionInfo>
+        <InvoiceNumber>24352000000061410366</InvoiceNumber>
+        <IssueTime>2024-06-13</IssueTime>
+        <TaxBureauCode>13500000000</TaxBureauCode>
+        <TaxBureauName>国家税务总局福建省税务局</TaxBureauName>
+    </TaxSupervisionInfo>
+    <TaxBureauSignature>
+        <Reference URI="/Einvoice/Header|/Einvoice/EinvoiceData|/Einvoice/SellerAuthentication|/Einvoice/TaxSupervisionInfo|/Einvoice/TaxBureauSignature/SignatureTime"/>
+        <SignatureAlgorithm>1.2.156.10197.1.501</SignatureAlgorithm>
+        <SignatureFormat>DETACH</SignatureFormat>
+        <SignatureTime>2024-06-13 15:45:13</SignatureTime>
+        <SignatureValue>30820179060a2a811ccf550601040202a082016930820165020101310e300c06082a811ccf550183110500300c060a2a811ccf550601040201318201403082013c02010130623058310b300906035504061302434e311b3019060355040b0c12e59bbde5aeb6e7a88ee58aa1e680bbe5b180312c302a06035504030c23e7a88ee58aa1e794b5e5ad90e8af81e4b9a6e7aea1e79086e4b8ade5bf8328534d32290206030000001191300c06082a811ccf550183110500a06e301906092a864886f70d010903310c060a2a811ccf550601040201302f06092a864886f70d010904312204204e5185e4f2e2cbf181df61c1f6a916f90b7ed75e9d40ce747e44cefdc79272d23020060a2a864886f70d010919043112021032303139313132373030303030304441300c06082a811ccf55018375050004473045022100a0b725ef4bbd6d5d22a7ac3e7deaa4928045e6512a308d3b12dc40dea7e72026022027ecf8ee9d99a42d6e0b8ba1011900e5c81183b88561e1c01ac1448082dd72dc&amp;MjAyNDA2MTMgMTU0NTEz</SignatureValue>
+        <KeyInfo/>
+    </TaxBureauSignature>
+</EInvoice>

@@ -1,0 +1,9 @@
+#datacard .ant-progress-inner{
+  width: 100px!important;
+  height: 100px!important;
+}
+.ant-progress-circle .ant-progress-text {
+
+  font-size: 20px!important;
+
+}

@@ -1,0 +1,143 @@
+@import (reference) '~antd/es/style/themes/index';
+
+// 编辑表单
+.dfrom {
+  :global {
+    label {
+      display: block;
+      padding: 4px 0;
+      line-height: 30px;
+    }
+
+    .ant-select {
+      width: 100%;
+      margin: 0 0 24px 0;
+      padding: 0 0;
+    }
+
+    .stitle {
+      height: 30px;
+    }
+
+    .colselect {
+      padding: 0;
+    }
+
+    .ant-form-item {
+      margin-bottom: 0;
+    }
+
+    div {
+      padding: 0 !important;
+    }
+
+    .ant-select-selector {
+      padding: 0 4px !important;
+    }
+  }
+}
+
+.inviteCountPre {
+  margin: 0;
+  padding: 0;
+  color: #747474;
+  text-align: right;
+}
+.userCountPre {
+  margin: 0;
+  margin-top: -22px;
+  padding: 0;
+  color: #747474;
+  text-align: right;
+}
+
+// 浏览模块
+.votelist {
+  :global {
+    .ant-form-item {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin-bottom: 0;
+    }
+
+    .ant-list-item {
+      display: flex;
+      justify-content: center;
+    }
+
+    .ant-form-item-label {
+      width: 110px;
+      padding: 0 15px;
+    }
+
+    .ant-input-affix-wrapper-disabled {
+      background-color: #fff;
+    }
+
+    .ant-input-affix-wrapper {
+      padding: 10px 0;
+      border: 0 solid;
+    }
+
+    .ant-input {
+      color: #4b4b4b;
+      font-size: 30px;
+      text-align: center;
+      background: #fff;
+    }
+
+    .ant-input-suffix {
+      display: none;
+    }
+  }
+}
+
+// 统计模块
+.countTable {
+  :global {
+    .ant-table-tbody span {
+      display: block;
+      width: 100%;
+      color: #2d2d2d;
+      font-weight: bold;
+      font-size: 18px;
+      text-align: center;
+    }
+  }
+}
+
+.group1 {
+  :global {
+    .width50 {
+      max-width: 50%;
+    }
+
+    .ant-col-xs-24 {
+      max-width: 50%;
+    }
+  }
+}
+
+/* stylelint-disable-next-line no-duplicate-selectors */
+.group1 {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.label1 {
+  padding: '0 4px 8px 4px';
+}
+
+.proformtreeselect1 {
+  width: 100%;
+  margin: 0 0 24px 0;
+  padding: 0 4px;
+}
+
+:global {
+  .row-dragging {
+    z-index: 1000000;
+  }
+}

@@ -1,0 +1,28 @@
+@import (reference) '~antd/es/style/themes/index';
+
+.sidebar {
+  display: none;
+  margin-right: 0;
+}
+
+.my-drawer {
+  :global {
+    .ant-drawer-body {
+      background: #f0f2f5;
+    }
+
+  }
+}
+
+@media (min-width: @screen-md-min) {
+  .menu {
+    display: none;
+  }
+
+  .sidebar {
+    display: block;
+    height: 88vh;
+    margin-right: 16px;
+    overflow: auto;
+  }
+}

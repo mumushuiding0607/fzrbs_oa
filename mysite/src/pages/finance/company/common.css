@@ -1,0 +1,6 @@
+
+#mi .ant-timeline-item:last-child{
+  padding-bottom: 0!important;
+  margin-bottom: -40px!important;
+}
+

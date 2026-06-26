@@ -1,0 +1,202 @@
+
+<template>
+  <div class='page'>
+    <Tabs class="mytab"  style="margin-left: 0;padding-left: 0;"  v-model:active="active" type="card"   >
+      
+    <Tab   title="审批中">
+      <List
+        :loading="loading[1]"
+        :finished="finished[1]"
+        finished-text="没有更多了"
+        offset="10"
+        @load="loaddata(1)"
+      >
+        <div v-for="item in datas[1]" :key="item.id" :title="item" class="listitem" @click="view(item)">
+
+          <listitem  :data="item"></listitem>
+        </div>
+          
+      </List>
+    </Tab>
+    <Tab   title="任务中">
+      <div style="display: flex;flex-direction: row;">
+        <Field
+          v-model="keyword[2]"
+          size="normal"
+          center
+          clearable
+          style="padding:3px 5px 1px 15px;"
+          placeholder="请输入关键字搜索"
+        >
+        </Field>
+        <span style="background-color: #1989fa;width: 50px;color: white;text-align: center;padding: 5px;margin: 5px;
+          font-size: var(--van-cell-font-size);border-radius: 10%;" @click="onSearch(2)">搜索</span>
+      </div>
+
+      <List
+        :loading="loading[2]"
+        :finished="finished[2]"
+        finished-text="没有更多了"
+        offset="10"
+        @load="loaddata(2)"
+      >
+        <div v-for="item in datas[2]" :key="item.id" :title="item" class="listitem" @click="view(item)">
+
+          <listitem  :data="item" ></listitem>
+        </div>
+          
+      </List>
+    </Tab>
+
+    <Tab   title="全部">
+      <div style="display: flex;flex-direction: row;">
+        <Field
+          v-model="keyword[0]"
+          size="normal"
+          center
+          clearable
+          style="padding:3px 5px 1px 15px;"
+          placeholder="请输入关键字搜索"
+        >
+        </Field>
+        <span style="background-color: #1989fa;width: 50px;color: white;text-align: center;padding: 5px;margin: 5px;
+          font-size: var(--van-cell-font-size);border-radius: 10%;" @click="onSearch(0)">搜索</span>
+      </div>
+
+      <List
+        :loading="loading[0]"
+        :finished="finished[0]"
+        finished-text="没有更多了"
+        offset="10"
+        @load="loaddata(0)"
+      >
+        <div v-for="item in datas[0]" :key="item.id" :title="item" class="listitem" @click="view(item)">
+
+          <listitem  :data="item" ></listitem>
+        </div>
+          
+      </List>
+    </Tab>
+
+    
+    
+  </Tabs>
+
+  
+  <tabbar :options="tabbarOptions" :active="activeTab"/>
+  </div>
+</template>
+<script  lang="ts">
+
+import listitem from '@/views/photodispatch/components/listitem.vue';
+
+import { List,Cell,Image,Tabs,Tab,Search,Field } from 'vant';
+import Button from 'vant/lib/button';
+import tabbar from '@/components/bottomtabbar.vue'
+import { useUserStore } from '@/stores';
+
+import { finishlist, getlist, getnotifydata, gettabs, history, inglist } from './api';
+import { StatesEnum } from './config';
+const cacheStore = useUserStore()
+  export default {
+    components: {
+      Button,Search,
+      Tabs,Tab,List,Cell,Image,listitem,Field,tabbar
+    },
+    metaInfo:{
+      title: '我的派工'
+    },
+    data () {
+      return {
+        query:<any>this.$route.query,
+        active:0,
+        refreshing:false,
+        datas:<any>[[],[],[],[],[],[]],
+        page:[0,0,0,0,0,0],
+        loading:[false,false,false,false,false,false],
+        finished:[false,false,false,false,false,false],
+        keyword:['','','','','',''],
+        tabbarOptions:[],
+        activeTab:0
+      }
+    },
+    watch:{
+      active(val){
+ 
+        var user = cacheStore.userInfo
+        user.photoMylistTab=val
+        cacheStore.setUserInfo(user)
+      }
+    },
+    
+    mounted() {
+      var tab = cacheStore.userInfo?.photoMylistTab
+      if(tab) this.active = tab
+
+      gettabs({}).then((res:any)=>{
+        this.tabbarOptions = res.data||[]
+        this.activeTab = res.activeTab||0
+      })
+      
+    },
+    created() {
+      this.active = 0
+    },
+    methods:{
+      onSearch(tab:any){
+        
+        this.datas[tab]=[]
+          this.page[tab]=0
+          this.finished[tab]=false
+        
+          this.loaddata(tab)
+      },
+      viewHistory(e:any){
+        var q = {thirdNo:e.order_no}
+        this.$router.push({name:'photodispatch_view',query:q})
+      },
+      view(e:any){
+ 
+        this.$router.push({name:'photodispatch_view',query:{thirdNo:e.order_no}})
+      },
+
+      async loaddata(index:number){
+        
+        console.log('index:',index)
+        this.loading[index] = true;
+        var current = this.page[index]+1
+        var res:any = null
+        var par:any = {pageSize:10,current}
+        if (this.keyword[index]){
+          par.keyword = this.keyword[index]
+        }
+        par.status = index
+        if(index==0) delete par.status
+        res = await getlist(par)
+        this.loading[index]=false
+        if (res){
+          
+          // 数据全部加载完成
+          if (res.data.length == 0) {
+            this.finished[index] = true;
+          }else {
+            this.datas[index].push(...res.data)
+            this.page[index] = current
+          }
+          
+   
+        }
+  
+       
+
+        
+        
+      }
+    }
+  }
+</script>
+
+<style   lang="css" src="@/views/financeCommon.css">
+
+  
+</style>

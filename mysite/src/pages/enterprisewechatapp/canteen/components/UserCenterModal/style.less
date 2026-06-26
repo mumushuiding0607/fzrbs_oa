@@ -1,0 +1,61 @@
+@import '~antd/es/style/themes/default.less';
+
+.filterCardList {
+  :global {
+    .ant-card-meta-content {
+      margin-top: 0;
+    }
+    // disabled white space
+    .ant-card-meta-avatar {
+      font-size: 0;
+    }
+
+    .ant-list .ant-list-item-content-single {
+      max-width: 100%;
+    }
+
+    .ant-card-body {
+      position: relative;
+      overflow: hidden;
+      .weixin {
+        display: inline-block;
+        margin-left: 5px;
+        color: #3fb838;
+        font-size: 20px;
+        line-height: 20px;
+        border-radius: @border-radius-base;
+      }
+    }
+  }
+  .cardInfo {
+    margin: 0;
+    zoom: 1;
+    &::before,
+    &::after {
+      display: table;
+      content: ' ';
+    }
+    &::after {
+      clear: both;
+      height: 0;
+      font-size: 0;
+      visibility: hidden;
+    }
+    & > div {
+      position: relative;
+      text-align: left;
+      p {
+        margin-bottom: 0.5em;
+        font-size: 14px;
+        line-height: 20px;
+        label {
+          display: inline-block;
+          width: 50%;
+        }
+      }
+      p:first-child {
+        margin-top: 1em;
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+colgroup col:last-child{
+  width: 80px!important;
+  right: -5px!important;
+}
+.ant-table-cell-fix-right {
+  right: -1px !important;
+}
+#supplementary .ant-timeline-item:last-child{
+  padding-bottom: 0!important;
+  margin-bottom: -40px!important;
+}
+
+td.right{
+  text-align: right!important;
+}
+
+ 
+
+td.nullify{
+  color: gray;
+  background-image: linear-gradient(to right, #c7c3c3 0%, #c7c3c3 100%);
+  background-size: 92% 1px;
+  background-repeat: no-repeat;
+  background-position: center; 
+}

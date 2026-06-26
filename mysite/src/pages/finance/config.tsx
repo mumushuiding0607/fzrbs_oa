@@ -1,0 +1,2 @@
+export const FINANCE_AGENTID = 1000066
+export const YXKH_AGENTID = 1000063

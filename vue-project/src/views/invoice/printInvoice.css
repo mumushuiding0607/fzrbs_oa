@@ -1,0 +1,207 @@
+:root{
+  --printRowMinHeight: 60px;
+  --fontSize: 16px;
+  --padding:10px;
+}
+
+.header, .footer {
+  background-color: #f0f0f0;
+  padding: 10px;
+  text-align: center;
+}
+.container{
+  width: 99%;
+  aspect-ratio: 210/150;
+  padding:2px;
+  background-color: white;
+  border:1px solid white;
+  border-bottom: 1px dashed gray;
+}
+#print .pbox{
+  width: 100%;
+  border:1px solid black;
+  font-size: var(--fontSize);
+}
+#print .row{
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  min-height: var(--printRowMinHeight);
+  border-bottom: 1px solid black;
+  align-items: center;
+  margin-left: 0;
+}
+#print .pbox .row:last-child{
+  border: none;
+}
+#print .col{
+  display: flex;
+  flex-direction: column;
+}
+#print .col .row{
+  border-left: 1px solid black;
+}
+#print .col .row:last-child{
+  border-left: 1px solid black;
+}
+#print .row .label{
+  /* width:80px; */
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+}
+#print .content{
+  flex:5
+}
+#print .content .item{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-right: 1px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.content .item:last-child{
+  border:none;
+}
+.content .item5{
+  width: 100%;
+}
+
+.content .item2{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-left: 1px solid black;
+  display: flex;
+  align-items: left;
+  padding-left: var(--padding);
+}
+.item3{
+  flex: 1;
+  height: calc(var(--printRowMinHeight)*3);
+  border-right: 1px solid black;
+  padding-left: var(--padding);
+}
+
+.item4{
+  flex:2;
+  height: calc(var(--printRowMinHeight)*3);
+  padding-left: var(--padding);
+}
+.col2{
+  border-left: 1px solid black;
+  height: calc(var(--printRowMinHeight)*2);
+}
+
+/* 新增样式 */
+#print .contentBox{
+  flex: 1;
+  border-left: 1px solid black;
+  height: calc(var(--printRowMinHeight)*2);
+  
+}
+#print .label2{
+  height:calc(var(--printRowMinHeight)*0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-bottom: 1px solid black;
+ 
+}
+#print .content2{
+  height:calc(var(--printRowMinHeight)*1.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+
+/* 纵向内容 */
+
+
+#print .ant-table {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.85);
+  font-variant: tabular-nums;
+  line-height: 1.5715;
+  list-style: none;
+  font-feature-settings: 'tnum', "tnum";
+  position: relative;
+  font-size: 16px;
+  background: #fff;
+  border-radius: 2px;
+  border: 1px solid #d9d9d9!important;
+}
+
+#print .ant-table-tbody > tr > td {
+    border-bottom: 1px solid black;
+    border-right: 1px solid black;
+}
+#print .ant-table-tbody > tr > td:first-child {
+  border-left: 1px solid black;
+}
+#print .ant-table-tbody > tr > td:nth-child(3) {
+  text-align: right;
+}
+#print .ant-table-tbody > tr > td:nth-last-child(2) {
+  text-align: right;
+}
+#print .ant-table-thead > tr > th {
+  border-top: 1px solid black;
+  border-bottom: 1px solid black;
+  border-right: 1px solid black;
+}
+#print .ant-table-thead > tr > th:first-child {
+  border-left: 1px solid black;
+}
+
+
+@media screen and (min-width: 500px){
+  :root{
+    --printRowMinHeight: 60px;
+    --fontSize: 16px;
+    --padding: 10px;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 隐藏不需要打印的内容 */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 设置打印区域的宽度 */
+  @page {
+    size: A4;   /* auto is the current printer page size */
+    /* margin: 10mm;  */
+    margin: 0;
+  }
+
+  /* 设置打印内容的边距 */
+  .print-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 控制分页 */
+  .page-break {
+    page-break-before: always;
+  }
+  .header, .footer {
+    display: none;
+  }
+  #print .row .label{
+    color: black;
+  }
+}

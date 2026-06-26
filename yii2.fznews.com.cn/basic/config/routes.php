@@ -1,0 +1,120 @@
+<?php
+
+return [
+    'api/login/captcha/<refresh>' => 'api/login/captcha',
+    'api/login/captcha' => 'api/login/captcha',
+    'api/login/login' => 'api/login/login',
+    'api/login/dynamic-code' => 'api/login/dynamic-code',
+    'api/login/qrcode' => 'api/login/qrcode',
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/account',
+        'extraPatterns' => [
+            'GET current' => 'current',
+            'GET menu' => 'route-menu',
+            'POST loginOut' => 'login-out',
+            'POST changePassword' => 'change-password',
+            'POST avatarUpload' => 'avatar-upload',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/ueditor',
+        'extraPatterns' => [
+            'GET do' => 'do',
+            'POST do' => 'do',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/common',
+        'extraPatterns' => [
+            'POST upload' => 'upload',
+            'POST uploadDelete' => 'upload-delete',
+            'GET department' => 'department',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/information',
+        'extraPatterns' => [
+            'POST cut' => 'cut',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/canteen',
+        'extraPatterns' => [
+            'POST asynchronization' => 'asynchronization',
+            'POST cut' => 'cut',
+            'POST recharge' => 'recharge',
+            'POST setUserType' => 'set-user-type',
+            'GET rechargeLog' => 'recharge-log',
+            'GET orders' => 'orders',
+            'POST chargeBack' => 'charge-back',
+            'POST orderDownload' => 'order-download',
+            'POST userType' => 'user-type',
+            'POST menuType' => 'menu-type',
+            'GET accountChange' => 'account-change',
+            'POST accountChangeDownload' => 'account-change-download',
+            'GET menus' => 'menus',
+            'POST addMenu' => 'create-menu',
+            'PUT updateMenu' => 'update-menu',
+            'DELETE removeMenu' => 'delete-menu',
+            'PUT updateMenuStatus' => 'update-menu-status',
+            'GET orderSum' => 'order-sum',
+            'GET accountChangeCreate' => 'account-change-create',
+            'POST accountExcelRecharge' => 'account-excel-recharge',
+            'POST accountBalanceDownload' => 'account-balance-download',
+            'GET excelRechargeTotal' => 'excel-recharge-total',
+            'GET accessTab' => 'access-tab',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/flow-role',
+        'extraPatterns' => [
+            'GET getRole' => 'get-role',
+            'GET getDict' => 'get-dict',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/flow-template',
+        'extraPatterns' => [
+            'GET getQyapp' => 'get-qyapp',
+            'GET getDict' => 'get-dict',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/leave',
+        'extraPatterns' => [
+            'GET dict' => 'dict',
+            'POST leaveinfoDownload' => 'leaveinfo-download',
+            'GET auth' => 'auth',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => 'api/housing',
+        'extraPatterns' => [
+            'GET auth' => 'auth',
+        ],
+        'pluralize' => false,
+    ],
+    [
+        'class' => 'yii\rest\UrlRule',
+        'controller' => ['api/admin', 'api/admin-login-log', 'api/route-menu', 'api/operation-log', 'api/operation-log-param', 'api/role', 'api/information-channel', 'api/app-interface', 'api/holiday-setting', 'api/apps/apps', 'api/apps/canteen', 'api/apps/news', 'api/apps/nei-wang-news', 'api/suggest', 'api/apps/vote', 'api/vote', 'api/youzan', 'api/leave-flow', 'api/app-auth', 'api/error-record', 'api/truck-order', 'api/photography-dispatch', 'api/oauser', 'api/oauser-department'],
+        'pluralize' => false,
+    ],
+    '<module>/<controller>/<action>' => '<module>/<controller>/<action>',
+];

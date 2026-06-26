@@ -1,0 +1,22 @@
+@import (reference) '~antd/es/style/themes/index';
+
+.sidebar {
+  display: none;
+  margin-right: 0;
+}
+.wbg{
+  padding: 2vw;
+  background-color: #ffffff;
+}
+
+@media (min-width: @screen-md-min) {
+  .menu {
+    display: none;
+  }
+  .sidebar {
+    display: block;
+    height: 80vh;
+    margin-right: 16px;
+    overflow: auto;
+  }
+}

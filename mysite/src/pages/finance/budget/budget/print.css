@@ -1,0 +1,187 @@
+:root{
+  --printRowMinHeight: 60px;
+  --fontSize: 18px;
+}
+@media print {
+  /* 隐藏整个页面，除了打印内容 */
+  /* body > * {
+    display: none !important;
+  } */
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  /* 只显示打印区域 */
+  #print {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+  
+  #print * {
+    visibility: visible;
+  }
+  
+  #print {
+    visibility: visible;
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 隐藏不需要打印的内容 */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 设置打印区域的宽度 */
+  @page {
+    size: A4;   /* auto is the current printer page size */
+    margin: 10mm; /* control the margins of the printed page */
+  }
+
+  /* 设置打印内容的边距 */
+  .print-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 控制分页 */
+  .page-break {
+    page-break-before: always;
+  }
+  .header, .footer {
+    display: none;
+  }
+}
+.header, .footer {
+  background-color: #f0f0f0;
+  padding: 10px;
+  text-align: center;
+}
+.container{
+  width: 99%;
+  aspect-ratio: 210/297;
+  padding:2px;
+  background-color: white;
+  border:1px solid white;
+  box-sizing: border-box;
+}
+.box{
+  width: 100%;
+  border:1px solid black;
+  font-size: var(--fontSize);
+}
+.row{
+  display: flex;
+  flex-direction: row;
+  min-height: 60px;
+  border-bottom: 1px solid black;
+  align-items: center;
+}
+.box .row:last-child{
+  border: none;
+}
+.col{
+  display: flex;
+  flex-direction: column;
+}
+.col .row{
+  border-left: 1px solid black;
+}
+.col .row:last-child{
+  border-left: 1px solid black;
+}
+.label{
+  /* width:80px; */
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+}
+.content{
+  flex:5
+}
+.content .item{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-right: 1px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.content .item:last-child{
+  border:none;
+}
+.content .item2{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-left: 1px solid black;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+.item3{
+  flex: 1;
+  height: calc(var(--printRowMinHeight)*3);
+  border-right: 1px solid black;
+  padding-left: 10px;
+}
+
+.item4{
+  flex:2;
+  height: calc(var(--printRowMinHeight)*3);
+  padding-left: 10px;
+}
+
+
+#print .ant-table {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  color: rgba(0, 0, 0, 0.85);
+  font-variant: tabular-nums;
+  line-height: 1.5715;
+  list-style: none;
+  font-feature-settings: 'tnum', "tnum";
+  position: relative;
+  font-size: 16px;
+  background: #fff;
+  border-radius: 2px;
+  border: 1px solid #d9d9d9!important;
+}
+
+#print .ant-table-tbody > tr > td {
+    border-bottom: 1px solid black;
+    border-right: 1px solid black;
+}
+#print .ant-table-tbody > tr > td:first-child {
+  border-left: 1px solid black;
+}
+#print .ant-table-tbody > tr > td:nth-child(3) {
+  text-align: right;
+}
+
+#print .ant-table-tbody > tr > td:nth-last-child(2) {
+  text-align: right;
+}
+#print .ant-table-thead > tr > th {
+  border-top: 1px solid black;
+  border-bottom: 1px solid black;
+  border-right: 1px solid black;
+}
+#print .ant-table-thead > tr > th:first-child {
+  border-left: 1px solid black;
+}

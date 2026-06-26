@@ -1,0 +1,238 @@
+/* 表格滚动容器样式 */
+
+
+.ant-table-container {
+  position: relative !important;
+}
+
+/* 广告列表专用样式 - offsetHeader: 40px */
+#advTable .ant-table-sticky-header {
+  background: #fff !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  top: 40px !important;
+  position: sticky !important;
+}
+
+#advTable .ant-table-sticky-holder {
+  background: #fff !important;
+  z-index: 1000 !important;
+  top: 40px !important;
+  position: sticky !important;
+}
+#advTable .ant-table-sticky-scroll-bar{
+  height: 0!important;
+}
+
+#orderTable .ant-table-sticky-holder {
+  background: #fff !important;
+  z-index: 1000 !important;
+  top: 0 !important;
+  position: sticky !important;
+}
+#orderTable .ant-table-sticky-scroll-bar{
+  height: 0!important;
+}
+#advTable .ant-table-sticky-holder > table > thead > tr > th {
+  background: #fff !important;
+  font-weight: 600 !important;
+  top: 40px !important;
+  position: sticky !important;
+  z-index: 10 !important;
+}
+
+.ant-table-body {
+  overflow: auto !important;
+}
+
+.ant-table-sticky-holder {
+  z-index: 100 !important;
+  position: sticky !important;
+}
+
+.ant-table-sticky-holder > table > thead > tr > th {
+  background: white !important;
+  position: sticky !important;
+  z-index: 10 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.ant-table-sticky-holder {
+  z-index: 100 !important;
+}
+
+/* 确保表头在滚动时保持可见 */
+.ant-table-thead > tr > th {
+  background: white !important;
+  position: sticky !important;
+  /* top: 40px !important; 考虑导航栏高度 */
+  z-index: 10 !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+
+.ant-pro-table .ant-table-thead > tr > th {
+  background: #fff !important;
+  font-weight: 600 !important;
+}
+
+/* 表格滚动容器样式 */
+.ant-table-container {
+  position: relative !important;
+}
+
+.ant-table-body {
+  overflow: auto !important;
+}
+
+/* 确保ProTable容器能正确滚动 */
+.ant-pro-table .ant-table {
+  position: relative;
+}
+
+.ant-pro-table .ant-table-sticky-holder {
+  background: white;
+}
+
+/* 增加页面高度确保有滚动空间 */
+.ant-pro-card-body {
+  min-height: 80vh;
+}
+
+/* 确保ProTable的sticky功能正常工作 */
+.ant-pro-table .ant-table-sticky-holder {
+  background: #fff !important;
+  z-index: 1000 !important;
+}
+
+.ant-pro-table .ant-table-sticky-holder {
+  background: #fff !important;
+  z-index: 1000 !important;
+}
+
+
+
+/* 确保表格内容区域可以滚动 */
+.ant-pro-table .ant-table-body {
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+/* 表头固定样式 - 简洁版 */
+.ant-table-sticky-holder {
+  background: white !important;
+  z-index: 100 !important;
+}
+
+
+
+
+
+/* 确保页面容器可以滚动 */
+.ant-pro-page-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.ant-pro-page-container .ant-pro-page-container-children-content {
+  height: calc(100vh - 120px);
+  overflow: auto;
+}
+
+
+
+/* 广告内容列溢出样式 */
+.ant-tooltip {
+  max-width: 300px !important;
+}
+
+.ant-tooltip-inner {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* 订单列表表格样式优化 */
+#orderTable .ant-table-container {
+  border-radius: 8px !important;
+}
+
+#orderTable .ant-table-body {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+}
+
+#orderTable .ant-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+#orderTable .ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#orderTable .ant-table-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+#orderTable .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 广告列表表格样式优化 */
+#advTable .ant-table-container {
+  border-radius: 8px !important;
+}
+
+#advTable .ant-table-body {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+}
+
+#advTable .ant-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+#advTable .ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#advTable .ant-table-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+#advTable .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 审批列表表格样式优化 */
+#approvalTable .ant-table-container {
+  border-radius: 8px !important;
+}
+
+#approvalTable .ant-table-body {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+}
+
+#approvalTable .ant-table-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+#approvalTable .ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#approvalTable .ant-table-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+#approvalTable .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}

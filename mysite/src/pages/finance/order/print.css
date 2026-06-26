@@ -1,0 +1,139 @@
+:root{
+  --printRowMinHeight: 50px;
+  --fontSize: 15px;
+}
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 隐藏不需要打印的内容 */
+  .no-print {
+    display: none !important;
+  }
+
+  /* 设置打印区域的宽度 */
+  @page {
+    size: A4;   /* auto is the current printer page size */
+    margin: 10mm; /* control the margins of the printed page */
+  }
+
+  /* 设置打印内容的边距 */
+  .print-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* 控制分页 */
+  .page-break {
+    page-break-before: always;
+  }
+  .header, .footer {
+    display: none;
+  }
+}
+.header, .footer {
+  background-color: #f0f0f0;
+  padding: 10px;
+  text-align: center;
+}
+.container{
+  width: 99%;
+  aspect-ratio: 210/297;
+  padding:2px;
+  background-color: white;
+  border:1px solid white;
+}
+.box{
+  width: 100%;
+  border:1px solid black;
+  font-size: var(--fontSize);
+  border-right:none ;
+}
+.row{
+  display: flex;
+  flex-direction: row;
+  min-height: var(--printRowMinHeight);
+  border-bottom: 1px solid black;
+  align-items: center;
+}
+.box .row:last-child{
+  border: none;
+}
+.col{
+  display: flex;
+  flex-direction: column;
+}
+.col .row{
+  border-left: 1px solid black;
+}
+.col .row:last-child{
+  border-left: 1px solid black;
+}
+.label{
+  width:120px;
+  /* flex: 1; */
+  height: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  
+}
+.content{
+  flex:5
+}
+#print .content .item{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-right: 1px solid black;
+  border-left: 1px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.content .item2{
+  flex: 1;
+  height: var(--printRowMinHeight);
+  border-left: 1px solid black;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+.item3{
+  flex: 1;
+  height: calc(var(--printRowMinHeight)*3);
+  border-right: 1px solid black;
+  padding-left: 10px;
+}
+
+.item4{
+  flex:2;
+  height: calc(var(--printRowMinHeight)*3);
+  padding-left: 10px;
+}
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .page-break {
+    page-break-before: always !important;
+  }
+  .header, .footer {
+    display: none !important;
+  }
+}
+
+
