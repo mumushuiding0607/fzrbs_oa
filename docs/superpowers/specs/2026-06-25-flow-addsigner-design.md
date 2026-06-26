@@ -4,7 +4,7 @@
 
 在「流程设置」管理员页面（`Flowtemplate/viewflow.tsx`）的审批节点上提供「加签」能力——在指定节点之后**插入**一个新审批节点，新节点包含 1 个加签人，必须该人审批后才能进入原后续节点。
 
-「转交」（`flowalter` / `flowalteritem`）已存在，本设计只新增「加签」，与之平行。
+「修改审批人」（`flowalteritem`，原 UI 名「修改审批人」= 内部术语「转交」）已存在，本设计只新增「加签」，与之平行。**UI 上保持原名「修改审批人」**以兼容老用户习惯。
 
 ## 2. 目标与范围
 
@@ -158,10 +158,11 @@ return ['ret' => 1];
 - **不**调用 `send()` 通知企业微信（按需求）
 - **不**修改 `WeixinOaApprovalInfo.approvalUserid`——加签节点在原节点之后，原审批人继续审批直至通过；通过后 `flowChange` 自然推进 step 到新节点
 
-### 4.5 与 `actionFlowalter` 的对比
+### 4.5 与 `actionFlowalteritem` 的对比
 
-| 维度 | flowalter | addsigner |
-|------|-----------|-----------|
+| 维度 | flowalteritem（修改审批人） | addsigner（加签） |
+|------|---------------------------|------------------|
+| UI 名 | 修改审批人 | 加签 |
 | 操作 | 替换节点 | 插入节点 |
 | 数据变更 | `$nodes[$step]['Items']['Item'] = [$newItem]` | `array_splice($nodes, $step+1, 0, [$newNode])` |
 | 原节点状态 | **被替换**（清空后重写） | **保持不变** |
@@ -210,7 +211,7 @@ onAlterApprover={(item, index, idx) => {
         defaultValue="transfer"
         onChange={(e) => setAlterMode(e.target.value)}
       >
-        <Radio.Button value="transfer">转交（替换审批人）</Radio.Button>
+        <Radio.Button value="transfer">修改审批人（替换原审批人）</Radio.Button>
         <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
       </Radio.Group>
     ),
@@ -238,7 +239,7 @@ onAlterApprover={(item, index, idx) => {
   api(params).then((res: any) => {
     if (res.errorMessage) Modal.error({ title: res.errorMessage });
     else {
-      setAlterMode('transfer');   // 重置回默认
+      setAlterMode('transfer');   // 重置回默认「修改审批人」
       getflowdata({ thirdNo: data.thirdNo }).then(setData);
     }
   });
@@ -247,7 +248,8 @@ onAlterApprover={(item, index, idx) => {
 
 **关键不变量**：
 - 加签入口**仅** `viewflow.tsx`（在 `Flowtemplate/` 目录下）。主审批 UI（`budget/budget/flow.tsx`）**不**改动。
-- 加签成功后 UI 回到「转交」模式，避免下次操作误用。
+- 默认选项是「修改审批人」（保留老用户习惯），加签是次选项。
+- 加签成功后 UI 回到「修改审批人」模式，避免下次操作误用。
 - 重置 `alterMode` 在成功回调里，不在 onCancel（用户取消时也保留选择，便于复看）。
 
 ### 5.4 `flow.tsx` 零改动
@@ -259,7 +261,7 @@ onAlterApprover={(item, index, idx) => {
 ```
 [管理员 viewflow.tsx]
   1. 在 Flow 步骤列表点击 avatar
-  2. 弹出 Modal.confirm 选择「转交 / 加签」
+  2. 弹出 Modal.confirm 选择「修改审批人 / 加签」
   3. 选择「加签」 → onOk → 弹出「选择新审批人」弹窗
   4. 选中加签人 → addsigner() 调用
      ↓
@@ -303,7 +305,7 @@ onAlterApprover={(item, index, idx) => {
 1. **`array_splice` 是核心**：PHP 的 `array_splice($arr, $offset, $length, $replacement)` 在 `$offset` 后插入 `$replacement` 数组，原数组元素后移。
 2. **JSON 字段直接读写**：所有变更在内存中完成，一次性 `json_encode` 写回。
 3. **状态机一致性**：`WeixinOaApprovalInfo.approvalUserid` 必须与 `flow.step` 指向的节点的 `Items.Item[0].ItemUserId` 一致。加签**不**改变 curstep 指向，所以**不**需要更新 `approvalUserid`——原审批人继续审批。
-4. **前端模式状态**：避免加签/转交混淆，每次操作成功后重置为 `transfer`。
+4. **前端模式状态**：避免加签/修改审批人混淆，每次操作成功后重置为 `transfer`（即「修改审批人」）。
 
 ## 10. 不在范围内（后续可选）
 
