@@ -1,13 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Col, Divider, Empty, Progress, Row, Spin } from 'antd';
+import { Card, Col, Empty, Progress, Row, Spin } from 'antd';
 import moment from 'moment';
 import { getContractGantt, ContractGanttData } from './service';
-import {
-  buildPlanSeries,
-  buildActualSeries,
-  decorateActualSeries,
-  calculateOverdueCount,
-} from './compute';
+import { buildPlanSeries, calculateOverdueCount } from './compute';
 import { CollectionGanttProps, COLORS } from './types';
 
 type DashboardStatus = 'green' | 'yellow' | 'red';
@@ -17,7 +12,6 @@ const fmtAmount = (n: number) =>
 
 const CollectionGantt: React.FC<CollectionGanttProps> = ({
   contractId,
-  height = 200,
   compact = false,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -54,18 +48,6 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
           )
         : [],
     [data, today],
-  );
-
-  const actualSeries = useMemo(
-    () =>
-      data
-        ? decorateActualSeries(
-            buildActualSeries(data.paycollections),
-            data.contract.amount,
-            planSeries,
-          )
-        : [],
-    [data, planSeries],
   );
 
   const overdueCount = useMemo(() => calculateOverdueCount(planSeries), [planSeries]);
@@ -112,40 +94,16 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
   if (!data) return <Card size="small"><Empty description="暂无数据" /></Card>;
 
   const hasPlan = planSeries.length > 0;
-  const hasActual = actualSeries.length > 0;
+  const hasActual = data.contract.paycollection > 0;
   if (!hasPlan && !hasActual) {
     return <Card size="small"><Empty description="暂无回款数据" /></Card>;
   }
-
-  // 渲染一条进度条行：label 在左，bar 在中，百分比在右
-  const ProgressRow: React.FC<{
-    label: string;
-    percent: number;
-    color: string;
-  }> = ({ label, percent, color }) => (
-    <Row align="middle" gutter={12} style={{ marginBottom: 8 }}>
-      <Col style={{ width: 72, flexShrink: 0 }}>
-        <span style={{ color: '#666', fontSize: 13 }}>{label}</span>
-      </Col>
-      <Col style={{ flex: 1 }}>
-        <Progress
-          percent={Math.round(percent)}
-          strokeColor={color}
-          showInfo={false}
-          strokeLinecap="round"
-        />
-      </Col>
-      <Col style={{ width: 56, textAlign: 'right', flexShrink: 0 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color }}>{Math.round(percent)}%</span>
-      </Col>
-    </Row>
-  );
 
   return (
     <Card
       title={<span style={{ fontSize: 14, fontWeight: 600 }}>合同收款进度</span>}
       size="small"
-      bodyStyle={{ padding: '16px 20px' }}
+      bodyStyle={{ padding: '20px 24px' }}
       extra={
         <span style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center' }}>
           <span
@@ -162,51 +120,50 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
         </span>
       }
     >
-      {/* 顶部：仪表盘 + 数字 + 期次状态 */}
-      <Row gutter={16} align="middle">
-        <Col style={{ width: 200, flexShrink: 0 }}>
-          <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Row gutter={20} align="middle">
+        <Col style={{ width: 220, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Progress
               type="dashboard"
               percent={Math.round(actualRate)}
               strokeColor={statusColor}
               trailColor="rgba(0, 0, 0, 0.06)"
               strokeWidth={8}
-              style={{ width: 160 }}
+              style={{ width: 180 }}
             />
           </div>
         </Col>
         <Col style={{ flex: 1 }}>
-          <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', gap: 32, alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>已收</div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: COLORS.EARLY, lineHeight: 1.2 }}>
+              <div style={{ fontSize: 24, fontWeight: 600, color: COLORS.EARLY, lineHeight: 1.2 }}>
                 ¥{fmtAmount(data.contract.paycollection)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>还欠</div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: '#595959', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#595959', lineHeight: 1.2 }}>
                 ¥{fmtAmount(remaining)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>总额</div>
-              <div style={{ fontSize: 22, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 24, fontWeight: 600, color: '#262626', lineHeight: 1.2 }}>
                 ¥{fmtAmount(data.contract.amount)}
               </div>
             </div>
           </div>
           {!compact && (
-            <div style={{ marginTop: 12, fontSize: 13, color: '#595959' }}>
-              <span style={{ marginRight: 16 }}>
+            <div style={{ marginTop: 16, fontSize: 13, color: '#595959' }}>
+              <span style={{ marginRight: 20 }}>
                 <span style={{ color: '#999' }}>提前 </span>
                 <span style={{ color: earlyCount > 0 ? COLORS.EARLY : '#bfbfbf', fontWeight: 600 }}>
                   {earlyCount}
                 </span>
                 <span style={{ color: '#999' }}> 期</span>
               </span>
-              <span style={{ marginRight: 16 }}>
+              <span style={{ marginRight: 20 }}>
                 <span style={{ color: '#999' }}>逾期 </span>
                 <span style={{ color: overdueCount > 0 ? COLORS.OVERDUE : '#bfbfbf', fontWeight: 600 }}>
                   {overdueCount}
@@ -224,16 +181,6 @@ const CollectionGantt: React.FC<CollectionGanttProps> = ({
           )}
         </Col>
       </Row>
-
-      <Divider style={{ margin: '12px 0' }} />
-
-      {/* 底部：进度条 */}
-      <div>
-        {hasPlan && (
-          <ProgressRow label="计划进度" percent={planRate} color={COLORS.PENDING} />
-        )}
-        <ProgressRow label="实际进度" percent={actualRate} color={statusColor} />
-      </div>
     </Card>
   );
 };
