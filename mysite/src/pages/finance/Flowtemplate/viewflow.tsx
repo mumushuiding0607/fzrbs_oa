@@ -16,12 +16,10 @@ const { Search } = Input;
 const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}> = ({thirdNo='',visible=false,onVisibleChange}) =>{
 
   const [showModal,setShowModal] = useState(visible)
-  const [showu,setShowu]=useState(false)
   const [data,setData]=useState<any>({})
   const [vkey,setVkey]=useState(0)
   const [stepSelect,setStepSelect]=useState<any>(0)
   const [itemSelect,setItemSelect]=useState<any>(0)
-  const [roowSelect,setRowSelect]=useState<any>({})
   const [agentid,setAgentid]=useState<any>()
   const [searchValue,setSearchValue]=useState(thirdNo||'')
   const [alterMode, setAlterMode] = useState<'transfer' | 'addsigner'>('transfer');
@@ -47,15 +45,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
     }
   },[visible,thirdNo])
 
-  useEffect(() => {
-    console.log('[DEBUG] showu changed to:', showu);
-  }, [showu]);
 
-  useEffect(() => {
-    console.log('[DEBUG] alterMode changed to:', alterMode);
-  }, [alterMode]);
-
-  
   const onSearch = (e:any)=>{
    
     getflowdata({thirdNo:e,agentid:agentid}).then(res=>{
@@ -98,7 +88,6 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
         <Flow key={vkey} data={data.viewdata} thirdNo={data.thirdNo}  statusCn={data.statusCn} step={data?.viewdata?.step+1} onRowClick={(item:any,index:any)=>{
           setStepSelect(index)
           setItemSelect(0)
-          setRowSelect(item)
         }} onAlterApprover={(item:any,index:any,idx:any)=>{
           // 只允许当前和未来步骤加签（与后端校验一致）
           if (index < (data.viewdata?.step ?? 0)) {
@@ -107,7 +96,6 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
           }
           setStepSelect(index);
           setItemSelect(idx !== undefined ? idx : 0);
-          setRowSelect(item);
           setShowAlterModal(true);
         }}></Flow>
         {
@@ -144,38 +132,25 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
         }
       </Modal>
       <Modal
-        title="选择操作"
+        title="添加操作"
         style={{ top: 20, }}
         visible={showAlterModal}
-        onOk={() => {
-          console.log('[DEBUG] 选择操作 OK clicked, alterMode=', alterMode);
+        onCancel={() => {
           setShowAlterModal(false);
-          setShowu(true);
-          console.log('[DEBUG] after setShowu(true)');
+          setAlterMode('transfer');
         }}
-        onCancel={() => setShowAlterModal(false)}
-      >
-        <Radio.Group
-          value={alterMode}
-          onChange={(e:any)=>setAlterMode(e.target.value)}
-        >
-          <Radio.Button value="transfer" style={{ marginRight: 8 }}>转交（替换原审批人）</Radio.Button>
-          <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
-        </Radio.Group>
-      </Modal>
-      <Modal
-        title="修改审批人"
-        style={{ top: 20, }}
-        visible={showu}
-        onOk={() => {
-          console.log(roowSelect)
-          console.log('step:',stepSelect)
-          setShowu(false)
-        }}
-        onCancel={() => setShowu(false)}
         footer={null}
       >
-        <UserAutocomplete multiple={false} onChange={(e:any)=>{
+        <div style={{ marginBottom: 16 }}>
+          <Radio.Group
+            value={alterMode}
+            onChange={(e:any)=>setAlterMode(e.target.value)}
+          >
+            <Radio.Button value="transfer" style={{ marginRight: 8 }}>转交（替换原审批人）</Radio.Button>
+            <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
+          </Radio.Group>
+        </div>
+        <UserAutocomplete multiple={false} placeholder="输入姓名搜索" onChange={(e:any)=>{
           if (!e) return;
           const isAdd = alterMode === 'addsigner';
           const api = isAdd ? addsigner : flowalteritem;
@@ -191,6 +166,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
               });
             } else {
               setAlterMode('transfer');   // 重置回默认「转交」
+              setShowAlterModal(false);  // 关闭 Modal
               getflowdata({thirdNo:data.thirdNo}).then(res=>{
                 if (res.errorMessage){
                   Modal.error({
@@ -203,10 +179,8 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
               })
             }
           })
-        }
-      }/>
+        }}/>
       </Modal>
-      
 
   </>
   )
