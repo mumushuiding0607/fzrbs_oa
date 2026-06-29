@@ -25,6 +25,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
   const [agentid,setAgentid]=useState<any>()
   const [searchValue,setSearchValue]=useState(thirdNo||'')
   const [alterMode, setAlterMode] = useState<'transfer' | 'addsigner'>('transfer');
+  const [showAlterModal, setShowAlterModal] = useState(false);
 
   useEffect(()=>{
     setShowModal(visible)
@@ -96,24 +97,10 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
             Modal.warning({ title: '已审批节点无法加签' });
             return;
           }
-          Modal.confirm({
-            title: '选择操作',
-            content: (
-              <Radio.Group
-                defaultValue="transfer"
-                onChange={(e:any)=>setAlterMode(e.target.value)}
-              >
-                <Radio.Button value="transfer">转交（替换原审批人）</Radio.Button>
-                <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
-              </Radio.Group>
-            ),
-            onOk:()=>{
-              setStepSelect(index)
-              setItemSelect(idx !== undefined ? idx : 0)
-              setRowSelect(item)
-              setShowu(true)
-            }
-          })
+          setStepSelect(index);
+          setItemSelect(idx !== undefined ? idx : 0);
+          setRowSelect(item);
+          setShowAlterModal(true);
         }}></Flow>
         {
           data.viewdata!=0 &&
@@ -147,6 +134,24 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
             }}>返回上一步</Button>
           </div>
         }
+      </Modal>
+      <Modal
+        title="选择操作"
+        style={{ top: 20, }}
+        visible={showAlterModal}
+        onOk={() => {
+          setShowAlterModal(false);
+          setShowu(true);
+        }}
+        onCancel={() => setShowAlterModal(false)}
+      >
+        <Radio.Group
+          value={alterMode}
+          onChange={(e:any)=>setAlterMode(e.target.value)}
+        >
+          <Radio.Button value="transfer" style={{ marginRight: 8 }}>转交（替换原审批人）</Radio.Button>
+          <Radio.Button value="addsigner">加签（插入新节点）</Radio.Button>
+        </Radio.Group>
       </Modal>
       <Modal
         title="修改审批人"
