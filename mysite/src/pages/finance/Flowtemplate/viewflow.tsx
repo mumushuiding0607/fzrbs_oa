@@ -47,6 +47,14 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
     }
   },[visible,thirdNo])
 
+  useEffect(() => {
+    console.log('[DEBUG] showu changed to:', showu);
+  }, [showu]);
+
+  useEffect(() => {
+    console.log('[DEBUG] alterMode changed to:', alterMode);
+  }, [alterMode]);
+
   
   const onSearch = (e:any)=>{
    
@@ -140,8 +148,10 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
         style={{ top: 20, }}
         visible={showAlterModal}
         onOk={() => {
+          console.log('[DEBUG] 选择操作 OK clicked, alterMode=', alterMode);
           setShowAlterModal(false);
           setShowu(true);
+          console.log('[DEBUG] after setShowu(true)');
         }}
         onCancel={() => setShowAlterModal(false)}
       >
