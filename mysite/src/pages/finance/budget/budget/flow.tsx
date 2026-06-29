@@ -70,13 +70,7 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
                         <div style={row}>
                           <span style={{cursor:index >= step && item.status != 2 ? 'pointer' : 'not-allowed'}} onClick={()=>{
                             if (index >= step && item.status != 2) {
-                              Modal.confirm({
-                                title: '修改审批人',
-                                content: '确认要修改审批人吗？',
-                                onOk: () => {
-                                  onAlterApprover && onAlterApprover(item, index)
-                                }
-                              })
+                              onAlterApprover && onAlterApprover(item, index)
                             }
                           }}>
                             <Avatar src={item.avatar} style={{ marginRight: 8 }} />
@@ -126,13 +120,7 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
                                   <Badge dot={aitem.status==2}>
                                     <span style={{cursor:index >= step && aitem.status != 2 ? 'pointer' : 'not-allowed'}} onClick={()=>{
                                       if (index >= step && aitem.status != 2) {
-                                        Modal.confirm({
-                                          title: '修改审批人',
-                                          content: '确认要修改审批人吗？',
-                                          onOk: () => {
-                                            onAlterApprover && onAlterApprover(aitem, index, idx)
-                                          }
-                                        })
+                                        onAlterApprover && onAlterApprover(aitem, index, idx)
                                       }
                                     }}>
                                       <Avatar src={aitem.avatar}/>
