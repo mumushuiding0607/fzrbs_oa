@@ -2213,8 +2213,12 @@ public function actionSaveinvoice(){
       $dept = WeixinOaDepartment::findOne($old['departmentid']);
       if ($this->haspower('财务管理',$this->agentid,$old['departmentid'],'')){
         $obj['department'] = $dept['name'];
-     
+
         FzrbsContract::updateAll($obj,['id'=>$obj['id']]);
+        $this->_operationlog([
+          'catalog' => '修改合同负责人',
+          'remark' => '合同【' . ($old['serial'] ?? '') . '】负责人由【' . ($old['charger'] ?? '') . '】改为【' . ($obj['charger'] ?? '') . '】'
+        ]);
       }else{
         
         return array('errorMessage'=>'不是部门【'.$dept['name'].'】的会计，不能操作！');
@@ -2274,6 +2278,10 @@ public function actionSaveinvoice(){
         return array('errorMessage'=>"保存数据：".$th->getMessage());
       }
       $transaction->commit();
+      $this->_operationlog([
+        'catalog' => '启动合同催收',
+        'remark' => '合同【' . ($urge['serial'] ?? '') . '】启动催收'
+      ]);
       if ($tesult['approvalUserid']){
         $tesult['approvalUserid'][]=$userid;
       }
