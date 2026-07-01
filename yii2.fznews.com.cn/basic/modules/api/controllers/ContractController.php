@@ -277,6 +277,10 @@ class ContractController extends ApiBase{
     $old['state'] = 4;
     $old['nullifyurls']=$this->_request['nullifyurls'];
     $old->save();
+    $this->_operationlog([
+      'catalog' => '合同作废',
+      'remark' => '作废合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
+    ]);
     return true;
   }
 
