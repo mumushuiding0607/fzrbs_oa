@@ -577,8 +577,12 @@ class ContractController extends ApiBase{
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
     }
+    $this->_operationlog([
+      'catalog' => '合同删除',
+      'remark' => '删除合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
+    ]);
     $transaction->commit();
-    
+
     return array('data'=>'删除成功');
   }
   public function actionNotice(){
