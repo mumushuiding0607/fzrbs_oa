@@ -1443,12 +1443,17 @@ public function actionSaveinvoice(){
 
  
 
-        for ($i=0; $i < sizeof($items); $i++) { 
+        for ($i=0; $i < sizeof($items); $i++) {
           $t=new FzrbsInvoiceItem($items[$i]);
           $t->invoiceid=$invoice['id'];
           $t->save();
         }
-      
+
+        $this->_operationlog([
+          'catalog' => $temp ? '发票关联合同' : '新增发票',
+          'remark' => '合同【' . $c['serial'] . '】' . ($temp ? '关联发票：' : '开票：') . '发票号【' . $invoice['number'] . '】金额【' . $invoice['amount'] . '】'
+        ]);
+
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
