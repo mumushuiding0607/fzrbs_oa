@@ -446,6 +446,10 @@ class ContractController extends ApiBase{
         }
       }
       $this->savelog($obj['id'],$action,$logdata);
+      $this->_operationlog([
+        'catalog' => $action == 'update' ? '修改合同' : '新增合同',
+        'remark' => ($action == 'update' ? '修改' : '新增') . '合同【' . $obj['serial'] . '】名称【' . $obj['title'] . '】金额【' . $obj['amount'] . '】对方【' . ($obj['partbname'] ?? '') . '】'
+      ]);
     } catch (\Throwable $th) {
   
       $transaction->rollBack();
