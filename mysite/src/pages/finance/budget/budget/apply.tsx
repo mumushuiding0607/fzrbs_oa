@@ -8,6 +8,7 @@ import { BalanceTypes, needBudgetCheck, ProjectStatesEnum, ProjectTypesEnum } fr
 import ReportView from '../project/reportview';
 import Flow from './flow';
 import ProlistTable from '../project/prolistTable';
+import BalanceLog from '../balancelog';
 import Allfiles from '../project/allfiles';
 
 
@@ -152,7 +153,8 @@ const [activeKey, setActiveKey] = useState('1');
             }
             
             <Menu.Item key="4">项目附件</Menu.Item>
-            <Menu.Item key="5">历史审批记录</Menu.Item>
+            <Menu.Item key="5">金额变更记录</Menu.Item>
+            <Menu.Item key="6">历史审批记录</Menu.Item>
             
           </Menu>
         </div>
@@ -197,7 +199,10 @@ const [activeKey, setActiveKey] = useState('1');
           activeKey=='4'&&<Allfiles projectid={data1.id}></Allfiles>
         }
         {
-          activeKey=='5'&& <ProlistTable key={data1.id}  projectid={data1.id}   ></ProlistTable>
+          activeKey=='5'&&<BalanceLog projectId={data1.id} />
+        }
+        {
+          activeKey=='6'&& <ProlistTable key={data1.id}  projectid={data1.id}   ></ProlistTable>
         }
         {
           activeKey=='6'&& <Budgetdetail key={'收支'+data1.id} id={data1.id} showTab={false} show={'all'}></Budgetdetail>

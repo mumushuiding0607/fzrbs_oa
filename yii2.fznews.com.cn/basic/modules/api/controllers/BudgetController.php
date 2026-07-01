@@ -3151,10 +3151,11 @@ class BudgetController extends ApiBase{
     $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
     $offset = $limit * ($page - 1);
 
+    $pattern = "[项目ID:{$projectid}]";
     $query = FzrbsOperationLog::find()
       ->select('id,catalog,remark,realname,inserttime')
       ->where(['=', 'catalog', '预算决算变更'])
-      ->andWhere(['like', 'remark', "[项目ID:{$projectid}]", false]);
+      ->andWhere("LOCATE('{$pattern}', remark) > 0");
 
     $total = $query->count();
     $res = $query->orderBy('inserttime desc')
