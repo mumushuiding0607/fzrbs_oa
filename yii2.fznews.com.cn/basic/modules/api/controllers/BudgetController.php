@@ -3774,9 +3774,35 @@ class BudgetController extends ApiBase{
       }
       $step = intval($approvearr['data']['approverstep'])-1;
 
+      // 单人审批节点去重：同一审批人多次出现时只保留最后一次
+      $singleApproverTitles = array();
+      foreach ($approvaldata as $i => $item) {
+        if ($item['items'] === '') {
+          $singleApproverTitles[$i] = $item['title'];
+        }
+      }
+      $lastOccurrence = array();
+      foreach ($singleApproverTitles as $i => $name) {
+        $lastOccurrence[$name] = $i;
+      }
+      $deduped = array();
+      $oldToNew = array();
+      $newIdx = 0;
+      foreach ($approvaldata as $i => $item) {
+        if (isset($singleApproverTitles[$i]) && $lastOccurrence[$singleApproverTitles[$i]] !== $i) {
+          continue; // 跳过较早的重复
+        }
+        $oldToNew[$i] = $newIdx;
+        $deduped[] = $item;
+        $newIdx++;
+      }
+      $approvaldata = $deduped;
+      // 调整 step 以匹配去重后的数组
+      $step = isset($oldToNew[$step]) ? $oldToNew[$step] : max(0, count($approvaldata) - 1);
+
     }
     return  array('flow'=>$approvedata['flow'],'viewdata'=>array('step'=>$step,'approval'=>$approvaldata,'notify'=>$notifier,'templatename'=>$approvedata['templatename'],'templateid'=>$approvedata['templateid']),'statusCn'=>$this->statusCn);
-    
+
   }
   /**
    * 流程预览
