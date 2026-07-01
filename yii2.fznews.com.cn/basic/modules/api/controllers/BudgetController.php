@@ -3167,6 +3167,7 @@ class BudgetController extends ApiBase{
     // 去掉remark里的项目ID前缀和项目名，方便展示
     foreach ($res as &$row) {
       $row['remark'] = preg_replace('/^\[项目ID:\d+\]\s*项目【[^】]*】\s*/', '', $row['remark']);
+      $row['inserttime'] = $row['inserttime'] ? date('Y-m-d H:i:s', $row['inserttime']) : '';
     }
 
     $this->_result['current'] = $page;
