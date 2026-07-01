@@ -1280,6 +1280,10 @@ class ContractController extends ApiBase{
       }
       
       FzrbsContract::updateAll(['paycollection'=>$paycollection],['id'=>$c['id']]);
+      $this->_operationlog([
+        'catalog' => $obj['id'] ? '修改回款' : '新增回款',
+        'remark' => '合同【' . $c['serial'] . '】' . ($obj['id'] ? '修改' : '新增') . '回款：金额【' . $obj['amount'] . '】，累计【' . $paycollection . '】'
+      ]);
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
