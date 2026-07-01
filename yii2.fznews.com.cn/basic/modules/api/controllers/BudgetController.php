@@ -3104,6 +3104,10 @@ class BudgetController extends ApiBase{
     if (!$this->haspower('收支管理',$this->agentId,$project['departmentid'],$project['creator'])) {
       return array('errorMessage'=>'需有收支管理权限');
     }
+
+    // 取变更前的4个值
+    $oldVals = $this->getProjectRealexpend($projectid);
+
     // 更新项目
     $transaction = Yii::$app->getDb()->beginTransaction();
     try {
@@ -3111,6 +3115,10 @@ class BudgetController extends ApiBase{
 
       // 更新项目的实际支出
       $temp = $this->getProjectRealexpend($projectid);
+
+      // 记录预算/决算金额变更
+      $this->_logBalanceChangesIfNeeded($project, $oldVals, $temp);
+
       $project->realbudgetexpend = $temp['realbudgetexpend'];
       $project->realfinalexpend = $temp['realfinalexpend'];
       $project->budgetbonus = $temp['budgetbonus'];
@@ -3125,6 +3133,46 @@ class BudgetController extends ApiBase{
     }
     $transaction->commit();
     return array('data'=>'删除成功');
+  }
+
+  /**
+   * 获取项目预算/决算金额变更日志
+   */
+  public function actionGetbalancelog() {
+    $projectid = $this->_request['projectid'];
+    if (!$projectid) {
+      return array('errorMessage' => 'projectid 不能为空');
+    }
+    $project = FzrbsBudgetProject::findOne($projectid);
+    if (!$project) {
+      return array('errorMessage' => '项目不存在');
+    }
+    $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+    $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
+    $offset = $limit * ($page - 1);
+
+    $query = FzrbsOperationLog::find()
+      ->select('id,catalog,remark,realname,inserttime')
+      ->where(['=', 'catalog', '预算决算变更'])
+      ->andWhere(['like', 'remark', "[项目ID:{$projectid}]", false]);
+
+    $total = $query->count();
+    $res = $query->orderBy('inserttime desc')
+      ->limit($limit)
+      ->offset($offset)
+      ->asArray()
+      ->all();
+
+    // 去掉remark里的项目ID前缀，方便展示
+    foreach ($res as &$row) {
+      $row['remark'] = preg_replace('/^\[项目ID:\d+\]\s*/', '', $row['remark']);
+    }
+
+    $this->_result['current'] = $page;
+    $this->_result['pageSize'] = $limit;
+    $this->_result['total'] = $total;
+    $this->_result['data'] = $res;
+    return $this->_result;
   }
 
   public function actionGetbalancelist(){
@@ -3253,7 +3301,10 @@ class BudgetController extends ApiBase{
     if ($project['thirdno']&&$project['thirdno']!=''&&$project['reject']!=1&&$project['offline']==0) {
       return array('errorMessage'=>'项目正在审批中,需要当前审批人驳回之后方能操作');
     }
-    
+
+    // 取变更前的4个值
+    $oldVals = $this->getProjectRealexpend($projectid);
+
     $transaction = Yii::$app->getDb()->beginTransaction();
     $changeitems = [];
     try {
@@ -3359,7 +3410,10 @@ class BudgetController extends ApiBase{
       
       // 更新项目的实际支出
       $temp = $this->getProjectRealexpend($projectid);
-      
+
+      // 记录预算/决算金额变更
+      $this->_logBalanceChangesIfNeeded($project, $oldVals, $temp);
+
       $project->realbudgetexpend = $temp['realbudgetexpend'];
       $project->realfinalexpend = $temp['realfinalexpend'];
       $project->budgetbonus = $temp['budgetbonus'];
@@ -4548,7 +4602,34 @@ class BudgetController extends ApiBase{
 
     
   
-    return array('realbudgetexpend'=>round($expendtotal,2),'realfinalexpend'=>round($finalexpend,2),'budgetbonus'=>$budgetbonus,'finalbonus'=>$finalbonus,'budgettaxtotal'=>$budgettaxtotal,'finaltaxtotal'=>$finaltaxtotal);
+    return array('realbudgetexpend'=>round($expendtotal,2),'realfinalexpend'=>round($finalexpend,2),'budgetbonus'=>$budgetbonus,'finalbonus'=>$finalbonus,'budgettaxtotal'=>$budgettaxtotal,'finaltaxtotal'=>$finaltaxtotal,'budgetincome'=>$project['budgetincome'],'finalincome'=>$project['finalincome']);
+  }
+
+  /**
+   * 记录预算/决算金额变更日志（复用 operationlog）
+   * 仅当 budgetincome / finalincome / realbudgetexpend / realfinalexpend 任一值发生变化时记录
+   */
+  private function _logBalanceChangesIfNeeded($project, $oldVals, $newVals) {
+    $changes = [];
+    if (floatval($oldVals['budgetincome']) != floatval($newVals['budgetincome'])) {
+      $changes[] = "预算收入：{$oldVals['budgetincome']}→{$newVals['budgetincome']}";
+    }
+    if (floatval($oldVals['finalincome']) != floatval($newVals['finalincome'])) {
+      $changes[] = "决算收入：{$oldVals['finalincome']}→{$newVals['finalincome']}";
+    }
+    if (floatval($oldVals['realbudgetexpend']) != floatval($newVals['realbudgetexpend'])) {
+      $changes[] = "预算支出：{$oldVals['realbudgetexpend']}→{$newVals['realbudgetexpend']}";
+    }
+    if (floatval($oldVals['realfinalexpend']) != floatval($newVals['realfinalexpend'])) {
+      $changes[] = "决算支出：{$oldVals['realfinalexpend']}→{$newVals['realfinalexpend']}";
+    }
+    if (empty($changes)) {
+      return;
+    }
+    $this->_operationlog([
+      'catalog' => '预算决算变更',
+      'remark' => "[项目ID:{$project['id']}] 项目【{$project['title']}】" . implode('，', $changes)
+    ]);
   }
 
   private function getTax($amount,$tax,$formula){

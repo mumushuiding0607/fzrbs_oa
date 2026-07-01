@@ -3,6 +3,7 @@ import { Button, Modal, Table,Tabs,Typography } from 'antd';
 import { getbudgetinfo } from './service';
 
 import Pdetail from '../balance/pdetail';
+import BalanceLog from '../balancelog';
 
 import Listb from '../balance/listb';
 import { ColumnsType } from 'antd/lib/table';
@@ -309,9 +310,12 @@ const onBalanceChange = ()=>{
                 {/* <Title key={titles[i]+i} level={5} style={{'textAlign':'left','marginTop':'10px'}}>{titles[i]}：</Title> */}
                 <Table rowKey='key' bordered columns={columns[i]} dataSource={(datas[i]||[]).map((item:any,index:any)=>({...item,key:'dt'+i+index}))} size="small" pagination={false} />
               </TabPane>
-       
+
             ))
           }
+          <TabPane tab="金额变更记录" key="log">
+            <BalanceLog projectId={id} />
+          </TabPane>
         </Tabs>
       }
 
