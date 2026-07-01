@@ -1876,14 +1876,19 @@ public function actionSaveinvoice(){
       }else if ($ret['nextdata']&&$ret['nextdata']['approvalUserid']){
         $this->send($ret['nextdata']['approvalUserid'],'有欠款审批申请需要您审批!',$d,0);
       }
-      
+
+
+      $this->_operationlog([
+        'catalog' => '合同审批通过',
+        'remark' => '合同【' . ($d['serial'] ?? $d['contractid'] ?? '') . '】审批通过'
+      ]);
 
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
     }
     $transaction->commit();
-    
+
     return array('data'=>$ret);
   }
 
@@ -1901,6 +1906,10 @@ public function actionSaveinvoice(){
       $wfp->updateAfterFlowChange($ret,$userid,$status,$postdatas,$transaction);
    
       FzrbsContractDebturge::updateAll(['thirdNo'=>'','dealresult'=>'','dealresultname'=>'','dealresultnote'=>''],['thirdNo'=>$postdatas['thirdNo']]);
+      $this->_operationlog([
+        'catalog' => '合同审批驳回',
+        'remark' => '合同【' . ($postdatas['serial'] ?? $postdatas['contractid'] ?? $postdatas['thirdNo'] ?? '') . '】审批驳回'
+      ]);
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
@@ -1921,7 +1930,12 @@ public function actionSaveinvoice(){
         $ret = $wfp->changeFlow($userid,$status,$postdatas);
         $wfp->updateAfterFlowChange($ret,$userid,$status,$postdatas,$transaction);
         FzrbsContractDebturge::updateAll(['thirdNo'=>'','dealresult'=>'','dealresultname'=>'','dealresultnote'=>''],['thirdNo'=>$postdatas['thirdNo']]);
-        
+
+        $this->_operationlog([
+          'catalog' => '合同审批撤销',
+          'remark' => '合同【' . ($postdatas['serial'] ?? $postdatas['contractid'] ?? $postdatas['thirdNo'] ?? '') . '】审批撤销'
+        ]);
+
       } catch (\Throwable $th) {
         $transaction->rollBack();
         return array('errorMessage'=>$th->getMessage());
@@ -1929,10 +1943,10 @@ public function actionSaveinvoice(){
       $transaction->commit();
 
       return array('data'=>array('ret'=>1));
-	
-	}
-  
-  
+
+  }
+
+
   public function actionInglist(){
 
     $userid = $this->_adminInfo['wxuserid'];
