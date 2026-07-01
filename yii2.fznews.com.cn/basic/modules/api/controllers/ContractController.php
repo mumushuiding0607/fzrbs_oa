@@ -549,11 +549,16 @@ class ContractController extends ApiBase{
       $old->delete();
       // 删除合同时,同时删除附件
     } catch (\Throwable $th) {
-      
+
       return array('errorMessage'=>$th->getMessage());
     }
-   
-    
+
+
+    $this->_operationlog([
+      'catalog' => '删除台账',
+      'remark' => '删除合同【' . ($old['serial'] ?? '') . '】台账 ID【' . $id . '】'
+    ]);
+
     return array('data'=>'删除成功');
   }
   public function actionDelcontract(){
@@ -805,6 +810,10 @@ class ContractController extends ApiBase{
     }
    
     $transaction->commit();
+    $this->_operationlog([
+      'catalog' => $obj['id'] ? '修改台账' : '新增台账',
+      'remark' => '合同【' . ($c['serial'] ?? '') . '】' . ($obj['id'] ? '修改' : '新增') . '台账：金额【' . ($obj['amount'] ?? '') . '】'
+    ]);
     $resp['data'] =$obj;
     return $resp;
   }
