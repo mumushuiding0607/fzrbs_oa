@@ -3774,32 +3774,6 @@ class BudgetController extends ApiBase{
       }
       $step = intval($approvearr['data']['approverstep'])-1;
 
-      // 单人审批节点去重：同一审批人多次出现时只保留最后一次
-      $singleApproverTitles = array();
-      foreach ($approvaldata as $i => $item) {
-        if ($item['items'] === '') {
-          $singleApproverTitles[$i] = $item['title'];
-        }
-      }
-      $lastOccurrence = array();
-      foreach ($singleApproverTitles as $i => $name) {
-        $lastOccurrence[$name] = $i;
-      }
-      $deduped = array();
-      $oldToNew = array();
-      $newIdx = 0;
-      foreach ($approvaldata as $i => $item) {
-        if (isset($singleApproverTitles[$i]) && $lastOccurrence[$singleApproverTitles[$i]] !== $i) {
-          continue; // 跳过较早的重复
-        }
-        $oldToNew[$i] = $newIdx;
-        $deduped[] = $item;
-        $newIdx++;
-      }
-      $approvaldata = $deduped;
-      // 调整 step 以匹配去重后的数组
-      $step = isset($oldToNew[$step]) ? $oldToNew[$step] : max(0, count($approvaldata) - 1);
-
     }
     return  array('flow'=>$approvedata['flow'],'viewdata'=>array('step'=>$step,'approval'=>$approvaldata,'notify'=>$notifier,'templatename'=>$approvedata['templatename'],'templateid'=>$approvedata['templateid']),'statusCn'=>$this->statusCn);
 
@@ -3957,6 +3931,33 @@ class BudgetController extends ApiBase{
             'ItemOpTime' => 0)),
             ))
             );
+        }
+
+        // 单人审批节点去重：同一审批人多次出现时只保留最后一次出现的节点（前面的重复节点删除）
+        // 但 NodeRoleid=5(会计) 或 NodeRoleid=14(公司会计) 不参与去重，保留所有节点
+        $singleApproverNames = array();
+        foreach ($flowdata['ApprovalNodes']['ApprovalNode'] as $idx => $node) {
+          if (isset($node['Items']['Item']) && count($node['Items']['Item']) === 1) {
+            // 会计(5)或公司会计(14)不参与去重
+            if (isset($node['NodeRoleid']) && in_array($node['NodeRoleid'], [5, 14])) {
+              continue;
+            }
+            $singleApproverNames[$idx] = $node['Items']['Item'][0]['ItemName'];
+          }
+        }
+        if (!empty($singleApproverNames)) {
+          $lastOccurrence = array();
+          foreach ($singleApproverNames as $idx => $name) {
+            $lastOccurrence[$name] = $idx;
+          }
+          $dedupedNodes = array();
+          foreach ($flowdata['ApprovalNodes']['ApprovalNode'] as $idx => $node) {
+            if (isset($singleApproverNames[$idx]) && $lastOccurrence[$singleApproverNames[$idx]] !== $idx) {
+              continue;
+            }
+            $dedupedNodes[] = $node;
+          }
+          $flowdata['ApprovalNodes']['ApprovalNode'] = $dedupedNodes;
         }
 
 
