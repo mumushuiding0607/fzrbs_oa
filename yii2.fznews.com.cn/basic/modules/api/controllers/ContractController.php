@@ -252,6 +252,10 @@ class ContractController extends ApiBase{
 
     
     FzrbsContract::updateAll(['state'=>$state],['id'=>$id]);
+    $this->_operationlog([
+      'catalog' => $state == 0 ? '合同解档' : '合同存档',
+      'remark' => '合同【' . $old['serial'] . '】名称【' . $old['title'] . '】' . ($state == 0 ? '解档' : '存档（state=1）')
+    ]);
     return true;
   }
   // 作废
