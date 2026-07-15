@@ -313,7 +313,7 @@ const onBalanceChange = ()=>{
 
             ))
           }
-          <TabPane tab="金额变更记录" key="log">
+          <TabPane tab="变更记录" key="log">
             <BalanceLog projectId={id} />
           </TabPane>
         </Tabs>

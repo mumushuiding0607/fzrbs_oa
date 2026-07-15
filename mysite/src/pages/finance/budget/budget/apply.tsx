@@ -153,8 +153,8 @@ const [activeKey, setActiveKey] = useState('1');
             }
             
             <Menu.Item key="4">项目附件</Menu.Item>
-            <Menu.Item key="5">金额变更记录</Menu.Item>
-            <Menu.Item key="6">历史审批记录</Menu.Item>
+            <Menu.Item key="5">变更记录</Menu.Item>
+            <Menu.Item key="7">历史审批记录</Menu.Item>
             
           </Menu>
         </div>
@@ -166,7 +166,7 @@ const [activeKey, setActiveKey] = useState('1');
       }
       {
         activeKey=='20'&&
-          <ReportView key={'finalreport'} id={data1.id} field={'finalreport'} edit={data1.creator==currentUser.wxuserid && data1.state<=ProjectStatesEnum.FINAL}  onChange={(text:any)=>{
+          <ReportView key={'finalreport'} id={data1.id} field={'finalreport'} edit={data1.creator==currentUser.wxuserid}  onChange={(text:any)=>{
       
               data1.finalreport = text
               setData1(data1)
@@ -183,7 +183,7 @@ const [activeKey, setActiveKey] = useState('1');
       }
       {
           activeKey=='30'&&
-          <ReportView key={'budgetreport'+data1.id} id={data1.id} field={'budgetreport'} edit={data1.creator==currentUser.wxuserid && (data1.state<ProjectStatesEnum.FINAL||[ProjectTypesEnum.QITA].includes(data1.type))} onChange={(text:any)=>{
+          <ReportView key={'budgetreport'+data1.id} id={data1.id} field={'budgetreport'} edit={data1.creator==currentUser.wxuserid} onChange={(text:any)=>{
               data1.budgetreport = text
               setReport(text)
               setData1(data1)
@@ -202,7 +202,7 @@ const [activeKey, setActiveKey] = useState('1');
           activeKey=='5'&&<BalanceLog projectId={data1.id} />
         }
         {
-          activeKey=='6'&& <ProlistTable key={data1.id}  projectid={data1.id}   ></ProlistTable>
+          activeKey=='7'&& <ProlistTable key={data1.id}  projectid={data1.id}   ></ProlistTable>
         }
         {
           activeKey=='6'&& <Budgetdetail key={'收支'+data1.id} id={data1.id} showTab={false} show={'all'}></Budgetdetail>

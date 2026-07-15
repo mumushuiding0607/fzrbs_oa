@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal } from 'antd';
-import AdvitemList from './AdvitemList';
+import AdvitemList from './advitemlist';
 import Filescard from '../contract/filescard';
 
 interface OrderPreviewProps {

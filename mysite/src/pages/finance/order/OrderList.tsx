@@ -1,7 +1,7 @@
 import { ActionType, PageContainer, ProColumns, ProFormInstance, ProFormSelect, ProTable } from '@ant-design/pro-components';
 import React, { useRef, useState, useEffect } from 'react';
 import { Button, Modal, Popover, Select, Tag, Dropdown, Menu, Form, Input, Space } from 'antd';
-import { PlusOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined, DownOutlined, CalendarOutlined } from '@ant-design/icons';
 
 import { getOrderList, deleteOrder, getAdvitem, printorder, setOrderFlag, getorderbyid } from './service';
 import SetObserver from '../role/SetObserver';
@@ -11,7 +11,7 @@ import ContractView from '../contract/view';
 import EditOrder from './EditOrder';
 import { OrderTypeEnum } from './config';
 
-import AdvitemList from './AdvitemList';
+import AdvitemList from './advitemlist';
 import Pricelist from './Pricelist';
 import AddFzAdv from './AddFzAdv';
 import AddSmallBusiness from './AddSmallBusiness';
@@ -37,6 +37,7 @@ import TableScrollSync from '../common/TableScrollSync';
 import PayerSelect from '../role/payerSelect';
 import Agentselect from '../role/agentselect';
 import UserAutocomplete from '../budget/common/userAutocomplete';
+import PreviewCalendarModal from './PreviewCalendarModal';
 
 const OrderList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -62,6 +63,7 @@ const [previewVisible, setPreviewVisible] = useState(false);
   const [loading, setLoading]=useState(false);
   const [observerModalVisible, setObserverModalVisible] = useState(false);
   const [observerRecord, setObserverRecord] = useState<any>(null);
+  const [previewCalendarVisible, setPreviewCalendarVisible] = useState(false);
 
   // 动态计算表格高度
   const calculateTableHeight = () => {
@@ -615,6 +617,9 @@ return (
                   <PlusOutlined /> 新建订单 <DownOutlined />
                 </Button>
               </Dropdown>,
+              <Button key="calendar" icon={<CalendarOutlined />} onClick={() => setPreviewCalendarVisible(true)}>
+                预览刊期
+              </Button>,
             ]}
           />
           
@@ -762,6 +767,12 @@ return (
           actionRef.current?.reload();
         }}
         agentid="1000083"
+      />
+
+      {/* 广告预览刊期弹窗 */}
+      <PreviewCalendarModal
+        visible={previewCalendarVisible}
+        onClose={() => setPreviewCalendarVisible(false)}
       />
 
     </PageContainer>

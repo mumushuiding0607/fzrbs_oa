@@ -60,7 +60,7 @@ const { currentUser } = initialState;
       &nbsp;&nbsp;&nbsp;&nbsp;
       总版面数: <span style={{ color: 'red' }}>{data?.AI_AdvPages}</span>
       &nbsp;&nbsp;&nbsp;&nbsp;
-      总广告数: <span style={{ color: 'red' }}>{formatInt(total)}</span>
+      总广告数: <span style={{ color: 'red', marginRight: 10 }}>{formatInt(total)}</span>
       &nbsp;&nbsp;&nbsp;&nbsp;
       新媒体计量: <span style={{ color: 'red' }}>{formatInt(data?.number)}</span>
     </div>

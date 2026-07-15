@@ -2148,6 +2148,87 @@ class FinanceroleController extends ApiBase{
     $p->delete();
     return array('data'=>$p);
   }
+
+  /**
+   * 重新激活已取消的审批流程
+   * @return array
+   */
+  public function actionRestartflow(){
+    $thirdNo = $this->_request['thirdNo'];
+    if (!$thirdNo){
+      return array('errorMessage'=>'thirdNo不能为空');
+    }
+    $agentid = isset($this->_request['agentid']) ? intval($this->_request['agentid']) : '';
+
+    // 根据agentid获取不同的数据表
+    switch ($agentid) {
+      case 1000063:
+        $data = FznewsFlowProcess::find()->where(['and',['=','processInstanceId',$thirdNo]])->one();
+        break;
+      case 1000066:
+        $data = WeixinFinanceInfo::find()->where(['and',['=','thirdNo',$thirdNo]])->one();
+        break;
+      default:
+        $data = WeixinOaApprovalInfo::find()->where(['and',['=','thirdNo',$thirdNo]])->one();
+        break;
+    }
+
+    if (!$data){
+      return array('errorMessage'=>'审批信息不存在');
+    }
+
+    // 检查状态是否为已取消
+    if ($data->status != 4){
+      return array('errorMessage'=>'只有已取消的审批才能重新激活');
+    }
+
+    $transaction = Yii::$app->db->beginTransaction();
+    try {
+      // 将状态改为审批中
+      $data->status = 1;
+      $data->save();
+      // 如果是1000080(非报项目)，需要更新FzrbsBudgetProject
+      $approvalData = json_decode($data['data'], true);
+      if ($agentid == 1000080) {
+        
+        $projectid = $approvalData['projectid'] ?? null;
   
+        if ($projectid) {
+          FzrbsBudgetProject::updateAll(['thirdno' => $thirdNo], ['id' => $projectid]);
+        }
+      }
+      // 更新流程步骤数据
+      $flow = null;
+      switch ($agentid) {
+        case 1000063:
+          $flow = WeixinFlowApprovaldata::find()->where(['and',['=','thirdNo',$thirdNo]])->one();
+          break;
+        default:
+          $flow = WeixinOaApprovaldata::find()->where(['thirdNo'=>$thirdNo])->one();
+          break;
+      }
+
+      if ($flow){
+        $flow->status = 1;
+        // 更新OpenSpstatus为1
+        $flowData = json_decode($flow->data, true);
+        if (isset($flowData['data']['OpenSpstatus'])) {
+          $flowData['data']['OpenSpstatus'] = 1;
+          $flow->data = json_encode($flowData);
+        }
+        
+        $flow->save();
+      }
+
+
+
+    } catch (\Throwable $th) {
+      $transaction->rollBack();
+      return array('errorMessage'=> $th->getMessage());
+    }
+    $transaction->commit();
+    return array('data'=>['ret'=>1]);
+  }
+
 
 }

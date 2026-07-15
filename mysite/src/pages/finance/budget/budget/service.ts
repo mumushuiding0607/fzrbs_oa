@@ -90,6 +90,13 @@ export async function flowact(params:{thirdNo?:any,speech?:string,act:string}){
   })
 }
 
+export async function restartflow(params:{thirdNo?:any,agentid?:any}){
+  return request<{errorMessage:String,data:{}}>('/api/financerole/restartflow',{
+    method: 'GET',
+    params:{...params}
+  })
+}
+
 // 根据角色查询用户
 export async function getuserbyrole(
   params:{

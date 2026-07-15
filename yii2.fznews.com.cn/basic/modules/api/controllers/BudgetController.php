@@ -1618,9 +1618,13 @@ class BudgetController extends ApiBase{
     if ($relatedcontractids){
       // relatedcontractids去掉空字符串
       $relatedcontractids = implode(',',array_filter(explode(',',$relatedcontractids)));
-      FzrbsContract::findBySql("SELECT group_concat(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.partaname END) as partincome,group_concat(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.partbname END) as partexpend,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.amount ELSE 0 END) AS `contractincome`,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.invoiceamount ELSE 0 END) AS `incomeinvoiceamount`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.amount ELSE 0 END) AS `contractexpend`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.invoiceamount ELSE 0 END) AS `expendinvoiceamount` from fzrbs_contract c where c.id in($relatedcontractids)")->asArray()->one();
+      $relatedcontract = FzrbsContract::findBySql("SELECT sum(paycollection) as paycollection,group_concat(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.partaname END) as partincome,group_concat(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.partbname END) as partexpend,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.amount ELSE 0 END) AS `contractincome`,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.invoiceamount ELSE 0 END) AS `incomeinvoiceamount`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.amount ELSE 0 END) AS `contractexpend`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.invoiceamount ELSE 0 END) AS `expendinvoiceamount` from fzrbs_contract c where c.id in($relatedcontractids)")->asArray()->one();
+      // 查询合同的已回款金额
+      
+      $res['paycollection'] = $relatedcontract['paycollection'];
     }
-    
+
+    $result['data'] = $res;
     $result['contract'] = $relatedcontract;
     
     // 查询新媒体收入：收入和支出
@@ -2354,6 +2358,231 @@ class BudgetController extends ApiBase{
     if (!$p) return array('data'=>'');
     return array('data'=>$p[$field]);
   }
+
+  /**
+   * 修改预算报告/决算报告
+   * - 决算之前：预算报告和决算报告均可自由修改
+   * - 决算完成之后：每次仅能修改15个字，且记录日志
+   */
+  public function actionAlterreport(){
+    $id = $this->_request['id'];
+
+    if (!$id) return array('errorMessage' => 'id 不能为空');
+
+    // field 和 content 从 budgetreport/finalreport 字段中获取
+    if (isset($this->_request['budgetreport'])) {
+      $field = 'budgetreport';
+      $content = $this->_request['budgetreport'];
+    } elseif (isset($this->_request['finalreport'])) {
+      $field = 'finalreport';
+      $content = $this->_request['finalreport'];
+    } else {
+      return array('errorMessage' => '缺少 budgetreport 或 finalreport 字段');
+    }
+
+    $p = FzrbsBudgetProject::findOne($id);
+    if (!$p) return array('errorMessage' => '项目不存在');
+
+    // 只有项目创建人可以修改报告
+    if ($p->creator != $this->_adminInfo['wxuserid']) {
+      return array('errorMessage' => '只有项目创建人可以修改报告');
+    }
+
+    $oldContent = $p[$field] ?? '';
+    $reportTypeLabel = $field === 'budgetreport' ? '预算报告' : '决算报告';
+
+    // 计算变更内容（字符级diff）
+    $diffContent = $this->_diffTextCharLevel($oldContent, $content);
+
+    // 判断是否进入受限阶段
+    // 预算报告：state >= FINAL（待决算及之后）
+    // 决算报告：state > FINAL（决算完成之后）
+    $isRestricted = $field === 'budgetreport'
+      ? (intval($p->state) >= $this->FINAL_PROJECT)
+      : (intval($p->state) > $this->FINAL_PROJECT);
+
+    if ($isRestricted) {
+      $maxLength = 15;
+      // 计算差异字数（排除HTML标签、空格和换行符）
+      $stripContent = strip_tags(preg_replace('/[\s\n\r]/', '', $content));
+      $stripOldContent = strip_tags(preg_replace('/[\s\n\r]/', '', $oldContent));
+      $diffLength = mb_strlen($stripContent) - mb_strlen($stripOldContent);
+      if ($diffLength > $maxLength) {
+        return array('errorMessage' => "每次仅能修改{$maxLength}个字");
+      }
+      // 记录受限修改的日志
+      $this->_operationlog([
+        'catalog' => '预算决算变更',
+        'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+      ]);
+    } else {
+      // 决算之前，记录日志
+      $this->_operationlog([
+        'catalog' => '预算决算变更',
+        'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+      ]);
+    }
+
+    // 更新报告内容
+    $p->$field = $content;
+    try {
+      $p->save();
+    } catch (\Throwable $th) {
+      return array('errorMessage' => $th->getMessage());
+    }
+
+    // 决算之前修改，发送消息通知（复用现有逻辑）
+    if ($p->state < $this->FINAL_PROJECT) {
+      $tousers = $this->getUserHasApproved($id);
+      if ($tousers) {
+        $this->sendChanges($tousers, $this->userinfo['name'] . "修改了【" . $p->title . "】的{$reportTypeLabel}", $p, array('title' => "更新了【{$reportTypeLabel}】"));
+      }
+    }
+
+    return array('data' => $content);
+  }
+
+  /**
+   * 计算两个文本之间的字符级差异，只返回替换内容
+   * 返回格式：旧字符 → 新字符
+   */
+  private function _diffTextCharLevel($oldText, $newText) {
+    if ($oldText === $newText) {
+      return '无变化';
+    }
+
+    // 去掉HTML标签，只比较纯文本内容
+    $oldPure = strip_tags($oldText);
+    $newPure = strip_tags($newText);
+
+    if ($oldPure === $newPure) {
+      return '无变化';
+    }
+
+    $oldChars = $this->_mbStrSplit($oldPure);
+    $newChars = $this->_mbStrSplit($newPure);
+    $oldLen = count($oldChars);
+    $newLen = count($newChars);
+
+    // 构建 LCS 矩阵
+    $lcs = array_fill(0, $oldLen + 1, array_fill(0, $newLen + 1, 0));
+    for ($i = 1; $i <= $oldLen; $i++) {
+      for ($j = 1; $j <= $newLen; $j++) {
+        if ($oldChars[$i - 1] === $newChars[$j - 1]) {
+          $lcs[$i][$j] = $lcs[$i - 1][$j - 1] + 1;
+        } else {
+          $lcs[$i][$j] = max($lcs[$i - 1][$j], $lcs[$i][$j - 1]);
+        }
+      }
+    }
+
+    // 回溯找出差异
+    $changes = [];
+    $i = $oldLen;
+    $j = $newLen;
+    while ($i > 0 || $j > 0) {
+      if ($i > 0 && $j > 0 && $oldChars[$i - 1] === $newChars[$j - 1]) {
+        array_unshift($changes, ['keep', $oldChars[$i - 1]]);
+        $i--;
+        $j--;
+      } elseif ($j > 0 && ($i === 0 || $lcs[$i][$j - 1] >= $lcs[$i - 1][$j])) {
+        array_unshift($changes, ['add', $newChars[$j - 1]]);
+        $j--;
+      } else {
+        array_unshift($changes, ['delete', $oldChars[$i - 1]]);
+        $i--;
+      }
+    }
+
+    // 提取替换片段（删除紧接新增，视为替换）
+    $result = [];
+    $idx = 0;
+    $len = count($changes);
+    while ($idx < $len) {
+      $op = $changes[$idx][0];
+      $char = $changes[$idx][1];
+
+      if ($op === 'keep') {
+        $idx++;
+      } elseif ($op === 'delete') {
+        // 收集连续的删除
+        $deleted = $char;
+        $idx++;
+        while ($idx < $len && $changes[$idx][0] === 'delete') {
+          $deleted .= $changes[$idx][1];
+          $idx++;
+        }
+        // 检查是否是删除后紧接新增（替换操作）
+        if ($idx < $len && $changes[$idx][0] === 'add') {
+          $added = $changes[$idx][1];
+          $idx++;
+          while ($idx < $len && $changes[$idx][0] === 'add') {
+            $added .= $changes[$idx][1];
+            $idx++;
+          }
+          // 合并连续的新增
+          while ($idx < $len && $changes[$idx][0] === 'add') {
+            $added .= $changes[$idx][1];
+            $idx++;
+          }
+          $result[] = "{$deleted} → {$added}";
+        } else {
+          // 纯删除（无对应新增），记录为删除
+          $result[] = "{$deleted} → (删除)";
+        }
+      } elseif ($op === 'add') {
+        // 纯新增（前面无删除），记录为新增
+        $added = $char;
+        $idx++;
+        while ($idx < $len && $changes[$idx][0] === 'add') {
+          $added .= $changes[$idx][1];
+          $idx++;
+        }
+        $result[] = "(新增) → {$added}";
+      }
+    }
+
+    if (empty($result)) {
+      return '无变化';
+    }
+
+    return implode('；', $result);
+  }
+
+  /**
+   * 按行diff（保留用于其他场景）
+   */
+  private function _diffText($oldText, $newText) {
+    if ($oldText === $newText) {
+      return '无变化';
+    }
+    $oldLines = explode("\n", $oldText);
+    $newLines = explode("\n", $newText);
+    $diff = [];
+    $maxLen = max(count($oldLines), count($newLines));
+    for ($i = 0; $i < $maxLen; $i++) {
+      $oldLine = $oldLines[$i] ?? '';
+      $newLine = $newLines[$i] ?? '';
+      if ($oldLine !== $newLine) {
+        if ($oldLine !== '' && $newLine !== '') {
+          $diff[] = "-{$oldLine}\n+{$newLine}";
+        } elseif ($newLine !== '') {
+          $diff[] = "+{$newLine}";
+        } else {
+          $diff[] = "-{$oldLine}";
+        }
+      }
+    }
+    return implode("\n", $diff) ?: '无变化';
+  }
+
+  /**
+   * 分割字符串为字符数组（支持中文等多字节字符）
+   */
+  private function _mbStrSplit($str) {
+    return preg_match_all('/./us', $str, $matches) ? $matches[0] : [];
+  }
+
   public function actionAltercreator(){
     $id=$this->_request['id'];
     // 查询项目
@@ -2684,6 +2913,7 @@ class BudgetController extends ApiBase{
     $contractids = $this->_request['contractids'];
     if (!$contractids) return [];
     $contracts = FzrbsContract::find()->where(['in','id',explode(',',$contractids)])->asArray()->all();
+    
     $result = [];
     for ($i=0; $i < sizeof($contracts); $i++) { 
       $where=['and',new Expression("FIND_IN_SET(".$contracts[$i]['id'].",p.contractids)"),['!=','p.deleted',1]];
@@ -3302,6 +3532,13 @@ class BudgetController extends ApiBase{
     // 正在审批中禁止修改
     if ($project['thirdno']&&$project['thirdno']!=''&&$project['reject']!=1&&$project['offline']==0) {
       return array('errorMessage'=>'项目正在审批中,需要当前审批人驳回之后方能操作');
+    }
+
+    // 禁止预算金额和决算金额同时为0
+    $budget = isset($obj['budget']) ? floatval($obj['budget']) : 0;
+    $final = isset($obj['final']) ? floatval($obj['final']) : 0;
+    if ($budget == 0 && $final == 0) {
+      return array('errorMessage' => '预算金额和决算金额不能同时为0');
     }
 
     // 取变更前的4个值
@@ -4428,10 +4665,14 @@ class BudgetController extends ApiBase{
     
   
     $model = WeixinOaApprovalInfo::find()->where($where);
-    
+
 
     $total = $model->count();
-    $res = $model->limit($limit)->offset($offset)->orderBy($orderby)->asArray()->all();    
+    $res = $model->limit($limit)->offset($offset)->orderBy($orderby)->asArray()->all();
+    foreach ($res as &$row) {
+      $row['title'] = ($row['userName'] ?? '') . ' ' . ($row['department'] ?? '');
+    }
+    unset($row);
     $_result = array();
     $_result["current"] = $page;
     $_result["pageSize"] = $limit;
@@ -4822,7 +5063,9 @@ class BudgetController extends ApiBase{
         // 预算收支总表
         $summary = [
           ['title'=>'总收入','budget'=>$project['budgetincome'],'final'=>$project['finalincome']],
-          ['title'=>'总支出','budget'=>$expendtotal,'final'=>$finalexpend,'finalnote'=>'支出占比:'.(round($project['finalincome']>0?$finalexpend*100/$project['finalincome']:0,1))."%",'budgetnote'=>'支出占比:'.(round($project['budgetincome']>0?$expendtotal*100/$project['budgetincome']:0,1))."%",'memo'=>'支出占比:'.(round($project['budgetincome']>0?$expendtotal*100/$project['budgetincome']:0,1))."%"]
+          ['title'=>'总支出','budget'=>$expendtotal,'final'=>$finalexpend,'finalnote'=>'支出占比:'.(round($project['finalincome']>0?$finalexpend*100/$project['finalincome']:0,1))."%",'budgetnote'=>'支出占比:'.(round($project['budgetincome']>0?$expendtotal*100/$project['budgetincome']:0,1))."%",
+          // 'memo'=>'支出占比:'.(round($project['budgetincome']>0?$expendtotal*100/$project['budgetincome']:0,1))."%"
+          ]
         ];
         
         

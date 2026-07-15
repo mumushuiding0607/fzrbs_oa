@@ -26,7 +26,7 @@
      <Filescard v-if="urls"  :urls="urls"/>
      <!-- 汇总备注 -->
      <div v-if="data.memo" class="cell">
-        <div class="label" style="margin-left: 10px;">备注</div>
+        <div class="label" style="margin-left: 10px;">备注:</div>
      </div>
      <div v-if="data.memo" class="cell">
         <div class="value" style="margin-left: 10px;">

@@ -1,6 +1,6 @@
 ﻿import { ActionType, ProColumns, ProFormInstance, ProTable } from '@ant-design/pro-components';
 import React, { useRef, useState, useEffect } from 'react';
-import { Button, Modal, Popover, Tag, Input, Select, DatePicker, Tooltip, Transfer } from 'antd';
+import { Button, Modal, Popover, Tag, Input, Select, DatePicker, Tooltip, Transfer, Tabs } from 'antd';
 import { PlusOutlined, SearchOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useModel } from 'umi';
 
@@ -28,19 +28,22 @@ import Flow from '../budget/budget/flow';
 import './common.css';
 import ContractView from '../contract/view';
 import Advsize from './advsize';
+import AdvLog from './advlog';
 
 interface AdvitemListProps {
   order?: any;
   onChange?: () => void;
+  pid?: any; // 刊物ID，用于按刊物过滤
+  params?: any; // 初始筛选参数
 }
 
-const AdvitemList: React.FC<AdvitemListProps> = ({ order, onChange }) => {
+const AdvitemList: React.FC<AdvitemListProps> = ({ order, onChange, pid, params: initParams }) => {
   const actionRef = useRef<ActionType>();
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editData, setEditData] = useState<any>({});
   const [refreshKey, setRefreshKey] = useState(0);
-  const [params, setParams] = useState<any>({});
+  const [params, setParams] = useState<any>(initParams || (pid ? { AI_Publication_ID: pid } : {}));
   const [advType, setAdvType] = useState<string>('fzadv'); // fzadv: 广告登记, smallbusiness: 小额业务, advitem: 普通广告
   const { initialState } = useModel<any>('@@initialState');
   const { currentUser } = initialState;
@@ -49,6 +52,7 @@ const AdvitemList: React.FC<AdvitemListProps> = ({ order, onChange }) => {
   const [printRecord, setPrintRecord] = useState<any>({});
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewData, setPreviewData] = useState<any>({});
+  const [previewTabKey, setPreviewTabKey] = useState('1');
   const [total,setTotal]=useState<any>(0);
   const [selectedRows, setSelectedRows] = useState<any>([]);
   const [tableHeight, setTableHeight] = useState<string>('calc(100vh - 300px)');
@@ -1118,62 +1122,69 @@ const AdvitemList: React.FC<AdvitemListProps> = ({ order, onChange }) => {
         footer={null}
         destroyOnClose
       >
-        <div style={{ padding: '20px' }}>
-          <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-            <h3 style={{ margin: 0 }}>基本信息</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div><strong>广告编号：</strong>{previewData.SYS_DOCUMENTID}</div>
-            <div><strong>刊物：</strong>{previewData.AI_Publication}</div>
-            <div><strong>主体：</strong>{previewData.partbname}</div>
-            <div><strong>客户：</strong>{previewData.AI_Customer}</div>
-            <div><strong>合同编号：</strong>{previewData.contractserial}</div>
-            <div><strong>业务员：</strong>{previewData.AI_Salesman}</div>
-            <div><strong>协助人员：</strong>{previewData.assistantname}</div>
-            <div><strong>协助部门：</strong>{previewData.assistantdepartmentname}</div>
-            <div><strong>部门：</strong>{previewData.AI_Org}</div>
-            <div><strong>广告内容：</strong>{previewData.AI_Content}</div>
-            <div><strong>内容详情：</strong>{previewData.content}</div>
-          </div>
-
-          <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-            <h3 style={{ margin: 0 }}>投放信息</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div><strong>规格：</strong>{previewData.AI_Size}</div>
-            <div><strong>版位：</strong>{previewData.AI_Field}</div>
-            <div><strong>颜色：</strong>{previewData.AI_Color}</div>
-            <div><strong>投放日期：</strong>{previewData.AI_PublishTime?.substring?.(0, 10)}</div>
-            <div><strong>结束日期：</strong>{previewData.AI_PublishEndTime?.substring?.(0, 10)}</div>
-            <div><strong>投放天数：</strong>{previewData.AI_PublishDayCount}</div>
-          </div>
-
-          <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-            <h3 style={{ margin: 0 }}>金额信息</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div><strong>单价：</strong>¥{formatMoney(previewData.AI_Price)}</div>
-            <div><strong>应收款：</strong>¥{formatMoney(previewData.AI_AmountReceivable)}</div>
-            <div><strong>已付金额：</strong>¥{formatMoney(previewData.AI_AmountReceived)}</div>
-            <div><strong>欠款：</strong><span style={{ color: previewData.AI_Debt > 0 ? 'red' : 'inherit' }}>¥{formatMoney(previewData.AI_Debt)}</span></div>
-            <div><strong>支付状态：</strong>{previewData.AI_PayStatus}</div>
-          </div>
-          <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-            <h3 style={{ margin: 0 }}>附件</h3>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-            <div><Filescard  urls={previewData.fileurls} mode="list"/></div>
-          </div>
-
-          {previewData.AI_PubMemo && (
-            <>
+        <Tabs activeKey={previewTabKey} onChange={(key) => setPreviewTabKey(key)}>
+          <Tabs.TabPane tab="广告详情" key="1">
+            <div style={{ padding: '20px' }}>
               <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-                <h3 style={{ margin: 0 }}>备注</h3>
+                <h3 style={{ margin: 0 }}>基本信息</h3>
               </div>
-              <div>{previewData.AI_PubMemo}</div>
-            </>
-          )}
-        </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div><strong>广告编号：</strong>{previewData.SYS_DOCUMENTID}</div>
+                <div><strong>刊物：</strong>{previewData.AI_Publication}</div>
+                <div><strong>主体：</strong>{previewData.partbname}</div>
+                <div><strong>客户：</strong>{previewData.AI_Customer}</div>
+                <div><strong>合同编号：</strong>{previewData.contractserial}</div>
+                <div><strong>业务员：</strong>{previewData.AI_Salesman}</div>
+                <div><strong>协助人员：</strong>{previewData.assistantname}</div>
+                <div><strong>协助部门：</strong>{previewData.assistantdepartmentname}</div>
+                <div><strong>部门：</strong>{previewData.AI_Org}</div>
+                <div><strong>广告内容：</strong>{previewData.AI_Content}</div>
+                <div><strong>内容详情：</strong>{previewData.content}</div>
+              </div>
+
+              <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>投放信息</h3>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div><strong>规格：</strong>{previewData.AI_Size}</div>
+                <div><strong>版位：</strong>{previewData.AI_Field}</div>
+                <div><strong>颜色：</strong>{previewData.AI_Color}</div>
+                <div><strong>投放日期：</strong>{previewData.AI_PublishTime?.substring?.(0, 10)}</div>
+                <div><strong>结束日期：</strong>{previewData.AI_PublishEndTime?.substring?.(0, 10)}</div>
+                <div><strong>投放天数：</strong>{previewData.AI_PublishDayCount}</div>
+              </div>
+
+              <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>金额信息</h3>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div><strong>单价：</strong>¥{formatMoney(previewData.AI_Price)}</div>
+                <div><strong>应收款：</strong>¥{formatMoney(previewData.AI_AmountReceivable)}</div>
+                <div><strong>已付金额：</strong>¥{formatMoney(previewData.AI_AmountReceived)}</div>
+                <div><strong>欠款：</strong><span style={{ color: previewData.AI_Debt > 0 ? 'red' : 'inherit' }}>¥{formatMoney(previewData.AI_Debt)}</span></div>
+                <div><strong>支付状态：</strong>{previewData.AI_PayStatus}</div>
+              </div>
+              <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+                <h3 style={{ margin: 0 }}>附件</h3>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                <div><Filescard  urls={previewData.fileurls} mode="list"/></div>
+              </div>
+
+              {previewData.AI_PubMemo && (
+                <>
+                  <div style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+                    <h3 style={{ margin: 0 }}>备注</h3>
+                  </div>
+                  <div>{previewData.AI_PubMemo}</div>
+                </>
+              )}
+            </div>
+          </Tabs.TabPane>
+          <Tabs.TabPane tab="变更记录" key="2">
+            <AdvLog advitemId={previewData.SYS_DOCUMENTID} />
+          </Tabs.TabPane>
+        </Tabs>
       </Modal>
 
       <AdvitemViewModal

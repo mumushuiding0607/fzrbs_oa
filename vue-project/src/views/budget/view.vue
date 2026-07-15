@@ -3,7 +3,7 @@
   <div class="box">
     <Tabs  swipe-threshold="3"  v-model:active="active"  :sticky="true" style="margin-left: 0;padding-left: 0;" type="card">
       <Tab  v-if="par.thirdNo" title="审批">
-        <Viewflow :projectid="par.projectid" :thirdNo="par.thirdNo" />
+        <Viewflow :projectid="par.projectid" :paycollection="project?.data?.paycollection" :thirdNo="par.thirdNo" />
       </Tab>
       <Tab  v-if="project.state>ProjectStatesEnum.BUDGET&&project.finalreport" title="决算报告">
         <NoticeBar
@@ -55,6 +55,7 @@ import Budgetdetail from './components/budgetdetail.vue';
     },
     mounted() {
       getproject({id:this.par.projectid}).then(res=>{
+        console.log('res:',res)
         if (res) this.project = res
       })
     },

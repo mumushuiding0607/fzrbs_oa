@@ -192,7 +192,7 @@ export async function savepaycollection(data: {}, options?: { [key: string]: any
 export async function delpaycollection(
   params:{id:any,agentid:any,signdeptid:any}
 ){
-  return request('/api/contract/delpaycollection',{
+  return request('/api/invoicing/delpaycollection',{
     method:'DELETE',
     params:{...params}
   })

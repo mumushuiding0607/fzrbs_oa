@@ -345,7 +345,6 @@ const AddSmallBusiness: React.FC<{ data?: any, onChange?: Function }> = ({ data,
           <InputNumber
             style={{width:'100%'}}
             placeholder="请输入金额"
-            min={0}
             precision={2}
           />
         </Form.Item>

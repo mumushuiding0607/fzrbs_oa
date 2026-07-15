@@ -119,9 +119,7 @@ class BudgetController extends ApiBase
       return $this->_runAction('BudgetController', 'getbalancefileurls','GET');
     }
     public function actionGetproject(){
-      $id = $this->_request['id'];
-      $info = FzrbsBudgetProject::find()->where(['id'=>$id])->asArray()->one();
-      Tools::responseJson($info);
+      return $this->_runAction('BudgetController', 'getprojectbyid','GET');
     }
 
     public function actionGetfileurlsbycontractids(){

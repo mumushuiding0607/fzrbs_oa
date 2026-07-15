@@ -3,7 +3,7 @@ import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import Dictselect from '../dict/dictselect';
 
 import {saveproject} from './service'
-import { useModel } from 'umi';
+import { useModel, request } from 'umi';
 import dayjs from 'dayjs';
 import weekday from "dayjs/plugin/weekday"
 import localeData from "dayjs/plugin/localeData"
@@ -63,6 +63,7 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
   const dateFormat = 'YYYY-MM-DD'
   const [addincomeModal,setAddincomeModal]=useState(false)
   const [deptcodeModal,setDeptcodeModal]=useState(false)
+  const [contractIdsValue, setContractIdsValue] = useState<any[]>([]);
 
   const uploadRef = useRef<AnimationPlayState>();
   const [defaultImage, setDefaultImage] = useState(obj.fileurls?obj.fileurls.split(',').map((url:any)=>{
@@ -109,9 +110,12 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
     }).join(',')
 
 
-    if (Array.isArray(values.contractids)){
-      values.contractids = values.contractids.map((e:any)=>e.value).join(',')
-    }
+    // 处理合同IDs，使用contractIdsValue确保获取最新值
+    const contractIds = Array.isArray(contractIdsValue) && contractIdsValue.length > 0
+      ? contractIdsValue.map((e:any)=>e.value).join(',')
+      : (Array.isArray(values.contractids) ? values.contractids.map((e:any)=>e.value).join(',') : values.contractids);
+    values.contractids = contractIds;
+
     if (Array.isArray(values.parta)){
       values.partaname = values.parta.map((e:any)=>e.label).join(',')
       values.parta = values.parta.map((e:any)=>e.value).join(',')
@@ -189,10 +193,39 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
   
       })
   }
-  const onContractChange = (e:any)=>{
+  const onContractChange = async (e:any)=>{
     console.log('onContractChange:',e)
     if (e && e.length>0){
       e = e.filter((d:any)=>d)
+
+      // 检查是否有新增的合同只有id没有完整数据，需要获取完整信息
+      for (let i = 0; i < e.length; i++) {
+        const item = e[i];
+        if (item.id && !item.label && !item.value) {
+          // 只有id，缺少label和value，需要获取完整信息
+          try {
+            const res = await request('/api/contract/getbykeyword', {
+              method: 'GET',
+              params: { id: item.id }
+            });
+            if (res && res.length > 0) {
+              const fullContract = {
+                label: res[0].title,
+                value: res[0].id,
+                ...res[0]
+              };
+              e[i] = fullContract;
+            }
+          } catch (err) {
+            console.error('获取合同详情失败', err);
+          }
+        } else if (item.id) {
+          // 确保有value字段
+          item.value = item.value || item.id;
+          item.label = item.label || item.title;
+        }
+      }
+
       var parta = e.map((d:any)=>d.parta).join(',')
       var partb = e.map((d:any)=>d.partb).join(',')
       var partaname = e.map((d:any)=>d.partaname).join(',')
@@ -201,7 +234,10 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
       form.setFieldsValue({partaname})
       form.setFieldsValue({partb})
       form.setFieldsValue({partbname})
+      setContractIdsValue(e)
       setCk(++ck)
+    } else {
+      setContractIdsValue([])
     }
   }
   const onApplyChange = (e:any)=>{
@@ -234,8 +270,8 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
                     </Form.Item>
                   </div>
                   <div style={row}>
-                    <Form.Item style={formitem} label="相关合同：" name="contractids">
-                      <ContractSelect multiple={true} showupload={false} type={BalanceTypes.INCOME} onChange={onContractChange} />
+                    <Form.Item style={formitem} label="相关合同：" name="contractids" valuePropName="value">
+                      <ContractSelect multiple={true} showupload={false} type={BalanceTypes.INCOME} value={contractIdsValue} onChange={onContractChange} />
                     </Form.Item>
                     <Form.Item label="立项部门:" name="pdepartmentid" style={formitem}  rules={[{ required: true, message: 'Please input!' }]}>
                       <DepartmentTreeSelect multiple={false} defaultValue={obj.pdepartmentid} />
@@ -372,20 +408,20 @@ const Addpro:React.FC<{onChange:any,data:any,visible:boolean,onVisibleChange?:Fu
                   <Incomelist  pid={obj.id} balancetype={BalanceTypes.EXPEND} onlyBalance={false}/>
                 </Tabs.TabPane>
                 <Tabs.TabPane tab="预算报告" key="2">
-                  
+
                   <ReportView key={'budgetreport'+obj.id} id={obj.id} field={'budgetreport'} edit={obj.creator==currentUser.wxuserid} onChange={(text:any)=>{
                     obj.budgetreport = text
-                    
+
                     setObj(obj)
                   }}/>
                 </Tabs.TabPane>
                 <Tabs.TabPane tab="决算报告" key="3">
-      
-                  <ReportView key={'finalreport'+obj.id} id={obj.id} field={'finalreport'} edit={obj.creator==currentUser.wxuserid }  onChange={(text:any)=>{
-        
+
+                  <ReportView key={'finalreport'+obj.id} id={obj.id} field={'finalreport'} edit={obj.creator==currentUser.wxuserid}  onChange={(text:any)=>{
+
                           obj.finalreport = text
                           setObj(obj)
-                          
+
                     }}/>
                 </Tabs.TabPane>
                 <Tabs.TabPane tab="提交审批" key="6">

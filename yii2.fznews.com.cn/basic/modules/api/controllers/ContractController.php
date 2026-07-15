@@ -169,7 +169,14 @@ class ContractController extends ApiBase{
     $keyword = $this->_request['keyword'];
     $limit = $this->_request['limit'];
     if ($this->_request['id']){
-      $where[] = ['=', 'id', $this->_request['id']];
+      $id = $this->_request['id'];
+      // 如果是逗号分隔的多个ID
+      if (strpos($id, ',') !== false) {
+        $ids = explode(',', $id);
+        $where[] = ['in', 'id', $ids];
+      } else {
+        $where[] = ['=', 'id', $id];
+      }
     }
     if ($keyword){
       // 如果是数字拼接
@@ -313,7 +320,8 @@ class ContractController extends ApiBase{
       if ($m['title']==$obj['title']){
         return array('errorMessage'=>'合同名称已经存在,请修改合同名称后再提交');
       }
-      if ($m['serial']==$obj['serial']){
+      // 如果标题包含"[镜像]"，则允许serial重复
+      if ($m['serial']==$obj['serial'] && !preg_match('/\[镜像\]/', $obj['title'])){
         return array('errorMessage'=>'合同编号已经存在,请修改合同编号后再提交');
       }
     }
@@ -1192,7 +1200,7 @@ class ContractController extends ApiBase{
   }
   public function actionDelpaycollection(){
     
-
+    return array('errorMessage'=>'请从【开票系统】->【发票列表】->【操作】->【回款记录】中删除');
     $id = $this->_request['id'];
     if(!$id) return array('errorMessage'=>'id 不能为空');
     // 只允许本人修改

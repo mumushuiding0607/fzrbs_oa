@@ -504,3 +504,45 @@ export async function advitemstatistics(
     data:{...params}
   });
 }
+
+/** 获取广告操作日志 */
+export async function getadvlog(
+  params: {
+    advitemid?: any;
+    orderid?: any;
+    current?: number;
+    pageSize?: number;
+  },
+  options?: { [key: string]: any },
+) {
+  return request<{
+    data: any[];
+    total?: number;
+    current?: number;
+    pageSize?: number;
+    errorMessage?: string;
+  }>('/api/advertisemanange/getadvlog', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
+
+/** 获取广告日历（指定年月的日期统计） */
+export async function getadvcalendar(
+  params: {
+    year?: number;
+    month?: number;
+  },
+  options?: { [key: string]: any },
+) {
+  return request('/api/advertisemanange/getadvcalendar', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}

@@ -5,6 +5,8 @@ import { EditOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 
 import UserAutocomplete from '../common/userAutocomplete';
 import Adddict from './adddict';
+import AdvitemList from '../../order/advitemlist';
+import { getAdvitemList } from '../../order/service';
 const row:CSSProperties = {
   display:'flex',
   flexDirection: 'row',
@@ -222,6 +224,8 @@ const DictListModal: React.FC<{
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [editRecord, setEditRecord] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [advModalVisible, setAdvModalVisible] = useState(false);
+  const [selectedDict, setSelectedDict] = useState<any>(null);
 
   const fetchData = async (page: number = 1, pageSize: number = 10) => {
     setLoading(true);
@@ -266,27 +270,68 @@ const DictListModal: React.FC<{
   };
 
   const handleDelete = (record: any) => {
-    Modal.confirm({
-      title: '确定要删除该字典项吗？',
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const res =await deldict({ id: record.id });
-          if (res.errorMessage){
-            Modal.error({ 
-              title: res.errorMessage,
-            });
-            return
-          }
-          message.success('删除成功');
-          fetchData(pagination.current, pagination.pageSize);
-          onSuccess?.();
-        } catch (error) {
-          message.error('删除失败');
+    // 如果是刊物类型，先检查是否有广告关联
+    if (type === '刊物') {
+      // 检查是否有广告关联
+      getAdvitemList({ AI_Publication_ID: record.value, current: 1, pageSize: 1 }).then((res: any) => {
+        const total = res?.total || res?.rows?.length || 0;
+        if (total > 0) {
+          Modal.error({
+            title: '无法删除',
+            content: `该刊物下已有 ${total} 条广告记录，请先删除或迁移相关广告后再删除`,
+          });
+          return;
         }
-      },
-    });
+        // 没有广告，确认删除
+        Modal.confirm({
+          title: '确定要删除该字典项吗？',
+          okText: '确认',
+          cancelText: '取消',
+          onOk: async () => {
+            try {
+              const delRes = await deldict({ id: record.id });
+              if (delRes.errorMessage) {
+                Modal.error({
+                  title: delRes.errorMessage,
+                });
+                return;
+              }
+              message.success('删除成功');
+              fetchData(pagination.current, pagination.pageSize);
+              onSuccess?.();
+            } catch (error) {
+              message.error('删除失败');
+            }
+          },
+        });
+      }).catch((err) => {
+        console.error('检查广告关联失败', err);
+        message.error('检查广告关联失败');
+      });
+    } else {
+      // 非刊物类型，直接删除
+      Modal.confirm({
+        title: '确定要删除该字典项吗？',
+        okText: '确认',
+        cancelText: '取消',
+        onOk: async () => {
+          try {
+            const res = await deldict({ id: record.id });
+            if (res.errorMessage) {
+              Modal.error({
+                title: res.errorMessage,
+              });
+              return;
+            }
+            message.success('删除成功');
+            fetchData(pagination.current, pagination.pageSize);
+            onSuccess?.();
+          } catch (error) {
+            message.error('删除失败');
+          }
+        },
+      });
+    }
   };
 
   const handleModalSuccess = () => {
@@ -319,6 +364,22 @@ const DictListModal: React.FC<{
       title: '名称',
       dataIndex: 'label',
       key: 'label',
+      render: (text: any, record: any) => {
+        // 类型为"刊物"时，点击名称弹出广告列表
+        if (type === '刊物') {
+          return (
+            <a
+              onClick={() => {
+                setSelectedDict(record);
+                setAdvModalVisible(true);
+              }}
+            >
+              {text}
+            </a>
+          );
+        }
+        return text;
+      },
     },
     {
       title: '值',
@@ -380,11 +441,29 @@ const DictListModal: React.FC<{
         footer={null}
         width={600}
       >
-        <Adddict 
-          data={editRecord || { type, subtype }} 
+        <Adddict
+          data={editRecord || { type, subtype }}
           agentid={agentid}
           onChange={handleModalSuccess}
         />
+      </Modal>
+
+      {/* 刊物广告列表弹窗 */}
+      <Modal
+        title={`${selectedDict?.label || '刊物'} - 广告列表`}
+        visible={advModalVisible}
+        onCancel={() => {
+          setAdvModalVisible(false);
+          setSelectedDict(null);
+        }}
+        footer={null}
+        width="90vw"
+        style={{ top: 20 }}
+        destroyOnClose
+      >
+        {advModalVisible && selectedDict && (
+          <AdvitemList pid={selectedDict.value} />
+        )}
       </Modal>
     </div>
   );

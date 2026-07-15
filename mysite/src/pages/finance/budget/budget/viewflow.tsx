@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Avatar, Typography,Steps,Card, Divider, Modal, Button, Tag, Descriptions,Tabs  } from 'antd';
 import './costom.css'
-import { getflowinfo,flowact, getfileurlsbycontractids } from './service';
+import { getflowinfo,flowact, getfileurlsbycontractids, restartflow } from './service';
 import { currentUser } from '@/services/ant-design-pro/api';
 import { useModel } from 'umi';
 import TextArea from 'antd/lib/input/TextArea';
 import { set } from 'lodash';
 import Filescard from '../../contract/filescard';
-import { FlowStateEunm, ProjectStatesEnum } from '../config';
+import { FlowStateEunm, ProjectStatesEnum, AGENTID } from '../config';
 import Flow from './flow';
 import Offlineagree from './offlineagree';
 import Print from './print';
@@ -235,7 +235,51 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
 
             ['已取消'].includes(statusCn[basic.status]) &&
             <div style={mask}>
-              <div style={{color:'black',fontSize:'40px'}}>{statusCn[basic.status]}</div>
+              <div style={{color:'black',fontSize:'40px', display:'flex', alignItems:'center', gap: 16}}>
+                <span>{statusCn[basic.status]}</span>
+                <span style={{color:'#1890FF',borderBottom:'2px solid #1890FF',cursor:'pointer'}} onClick={() => {
+                  Modal.confirm({
+                    title: '确定要继续审批吗？',
+                    onOk() {
+                      restartflow({thirdNo: thirdno, agentid: AGENTID}).then((res:any) => {
+                        if (res.errorMessage) {
+                          Modal.error({ title: res.errorMessage });
+                        } else {
+                          Modal.info({ title: '操作成功！' });
+                          getflowinfo({thirdNo:thirdno,projectid,state}).then((res:any)=>{
+                            if (res.errorMessage) {
+                              Modal.error({
+                                title: '报错',
+                                content: res.errorMessage,
+                              });
+                            } else {
+                              setBasic(res.basic)
+                              setViewdata(res.viewdata)
+                              setStatusCn(res.statusCn)
+                              setIncomecontracts(res.incomecontracts)
+                              setExpendcontracts(res.expendcontracts)
+
+                              if (res.viewdata) {
+                                setStep(res.viewdata.step+1)
+                                var node = res.viewdata.approval[res.viewdata.step+1]
+                                var temp = false
+                                if (node.NodeStatus==2){
+                                  temp=true
+                                }else{
+                                  var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
+                                  if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
+                                }
+                                setApprove(temp)
+                              }
+                              if (onchange) onchange(res)
+                            }
+                          });
+                        }
+                      });
+                    },
+                  });
+                }}>继续审批</span>
+              </div>
             </div>
            }
            {

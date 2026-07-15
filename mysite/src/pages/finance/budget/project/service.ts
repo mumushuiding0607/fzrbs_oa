@@ -76,7 +76,7 @@ export async function altersubmitdate(data: {}, options?: { [key: string]: any }
 }
 
 export async function alterproreport(data: {}, options?: { [key: string]: any }) {
-  return request('/api/budget/alterproject', {
+  return request('/api/budget/alterreport', {
     data,
     method: 'POST',
     ...(options || {}),

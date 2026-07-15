@@ -64,6 +64,21 @@ class AdvertisemanangeController extends ApiBase{
        return $authors == $currentUserid;
    }
 
+   /**
+    * 检查日期是否是当月
+    * @param string $date 日期字符串
+    * @return bool
+    */
+   private function isCurrentMonth($date)
+   {
+       if (empty($date)) {
+           return false;
+       }
+       $recordMonth = date('Y-m', strtotime($date));
+       $currentMonth = date('Y-m');
+       return $recordMonth === $currentMonth;
+   }
+
 /**
      * 检查用户是否有指定角色
      * @param string $roleName 角色名称（如'广告审核'）
@@ -1130,7 +1145,7 @@ class AdvertisemanangeController extends ApiBase{
                 $obj['AI_Week'] = $weekdayMap[$startWeekday] . '~' . $weekdayMap[$endWeekday];
             }
         }
-        var_dump($obj['AI_Week']);exit;
+      
         
         // 计算投放天数
         if (empty($obj['AI_PublishEndTime'])) {
@@ -1195,11 +1210,34 @@ class AdvertisemanangeController extends ApiBase{
           } else {
 
               // 更新广告时检查权限并获取原有日期字段
-              $checkSql = "SELECT SYS_AUTHORS, AI_PublishTime, AI_PublishEndTime FROM advitem WHERE SYS_DOCUMENTID = :id";
+              $checkSql = "SELECT SYS_AUTHORS, AI_PublishTime, AI_PublishEndTime, AI_OrderID FROM advitem WHERE SYS_DOCUMENTID = :id";
               $existingAdvitem = Yii::$app->paymentdb->createCommand($checkSql)->bindValues([':id' => $obj['SYS_DOCUMENTID']])->queryOne();
 
-              if (!$this->checkAuthor($existingAdvitem['SYS_AUTHORS'])) {
+              // 检查是否是广告审核角色
+              $isAuditor = $this->checkRole('广告审核');
+              $isCurrentMonth = $this->isCurrentMonth($existingAdvitem['AI_PublishTime']);
+
+              // 往期广告只有审核员才能修改
+              if (!$isCurrentMonth && !$isAuditor) {
+                  return ['errorMessage' => '往期广告只有审核员才能修改'];
+              }
+
+              // 当月广告：必须本人才能修改
+              if ($isCurrentMonth && !$this->checkAuthor($existingAdvitem['SYS_AUTHORS'])) {
                   return ['errorMessage' => '只有本人才能操作'];
+              }
+
+              // 审核员修改往期广告：检查修改次数和金额限制
+              if (!$isCurrentMonth && $isAuditor) {
+                  $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND remark LIKE :remark";
+                  $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':remark' => '%' . $obj['SYS_DOCUMENTID'] . '%'])->queryOne();
+                  if ($modifyResult && $modifyResult['cnt'] > 0) {
+                      return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
+                  }
+                  // 审核员修改往期广告，不允许修改金额
+                  if (isset($obj['AI_AmountReceivable']) && $obj['AI_AmountReceivable'] != $existingAdvitem['AI_AmountReceivable']) {
+                      return ['errorMessage' => '审核员修改往期广告不允许修改金额'];
+                  }
               }
 
               // 如果请求中没有 AI_PublishTime，使用数据库原有值来重新计算 AI_Week
@@ -1241,11 +1279,32 @@ class AdvertisemanangeController extends ApiBase{
                 $obj['AI_UninvoicedMoney'] = ($obj['AI_AmountReceivable'] ?? 0) - ($obj['AI_InvoicedMoney'] ?? 0);
               }
               
-  
+
               // 只更新需要的字段，避免覆盖不需要更新的字段如fileurls
               $updateFields = array_diff_key($obj, ['SYS_DOCUMENTID' => '']); // 排除主键字段
               Yii::$app->paymentdb->createCommand()->update('advitem', $updateFields, 'SYS_DOCUMENTID = :id', [':id' => $obj['SYS_DOCUMENTID']])->execute();
-              
+
+              // 记录操作日志（对比变化）
+              $changeDetails = [];
+              $compareFields = ['AI_Customer' => '客户', 'AI_AmountReceivable' => '应收金额', 'AI_PublishTime' => '发布日期', 'AI_Content' => '内容'];
+              foreach ($compareFields as $field => $label) {
+                  if (isset($obj[$field]) && isset($existingAdvitem[$field]) && $obj[$field] != $existingAdvitem[$field]) {
+                      $oldVal = $existingAdvitem[$field];
+                      $newVal = $obj[$field];
+                      // 日期格式化为年月日
+                      if ($field === 'AI_PublishTime') {
+                          $oldVal = substr($oldVal, 0, 10);
+                          $newVal = substr($newVal, 0, 10);
+                      }
+                      $changeDetails[] = $label . '由【' . $oldVal . '】变为【' . $newVal . '】';
+                  }
+              }
+              $changeText = empty($changeDetails) ? '广告内容变更' : implode('，', $changeDetails);
+              $this->_operationlog([
+                  'catalog' => '修改广告',
+                  'remark' => '修改广告【' . $obj['SYS_DOCUMENTID'] . '】' . $changeText
+              ]);
+
           }
           // 更新关联的订单金额
           if (!empty($obj['AI_OrderID'])) {
@@ -1369,7 +1428,19 @@ class AdvertisemanangeController extends ApiBase{
               return ['errorMessage' => '已审批的广告无法删除'];
           }
 
-      
+          // 检查是否是当月订单（根据AI_PublishTime判断）
+          if (!$this->isCurrentMonth($advitem['AI_PublishTime'])) {
+              return ['errorMessage' => '只能删除当月的广告'];
+          }
+
+          // 检查广告是否有已通过的审批流程（advitem单独审批）
+          $checkApprovalSql = "SELECT COUNT(*) as cnt FROM weixin_oa_approval_info WHERE status = 2 AND data LIKE :infoid";
+          $approvalResult = Yii::$app->db->createCommand($checkApprovalSql)->bindValues([':infoid' => '%"infoid":"' . $id . '"%'])->queryOne();
+          if ($approvalResult && $approvalResult['cnt'] > 0) {
+              return ['errorMessage' => '该广告曾经审核通过过，无法删除'];
+          }
+
+
           // 硬删除,根据SYS_DOCUMENTID进行删除
             $sql = "DELETE FROM advitem WHERE SYS_DOCUMENTID = :id";
             Yii::$app->paymentdb->createCommand($sql)->bindValues([':id' => $id])->execute();
@@ -1594,50 +1665,20 @@ class AdvertisemanangeController extends ApiBase{
                   Yii::$app->paymentdb->createCommand()->update(Advorder::tableName(), ['SYS_DELETEFLAG'=>1,'thirdNo'=>''], ['SYS_DOCUMENTID' => $orderId])->execute();
                   
               } else {
-                  if($existingOrder){
-                    // 判断是否已经生效
-                    if ($existingOrder['SYS_DELETEFLAG']==0) {
-                      // 判断附件是否一致
-                      $advitemId = $obj['SYS_DOCUMENTID'];
-                      $checkAdvitemSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
-                      $existingAdvitem = Yii::$app->paymentdb->createCommand($checkAdvitemSql)->bindValues([':id' => $advitemId])->queryOne();
-                      $fileurlsChanged = $existingAdvitem['fileurls'] != $obj['fileurls'];
-                      // 从advorder表检查合同字段变化（contractid和contractserial只存在于advorder表）
-                      $existingContractid = isset($existingOrder['contractid']) ? $existingOrder['contractid'] : '';
-                      $existingContractserial = isset($existingOrder['contractserial']) ? $existingOrder['contractserial'] : '';
-                      $contractidChanged = $existingContractid != ($objContractid ?? '');
-                      $contractserialChanged = $existingContractserial != ($objContractserial ?? '');
-                      // 调试日志
-                      Yii::info("订单已生效检查: fileurlsChanged=$fileurlsChanged, contractidChanged=$contractidChanged, contractserialChanged=$contractserialChanged");
-                      Yii::info("existingOrder contractid=$existingContractid, contractserial=$existingContractserial");
-                      Yii::info("obj contractid=" . ($obj['contractid'] ?? 'null') . ", contractserial=" . ($obj['contractserial'] ?? 'null'));
-                      if ($fileurlsChanged || $contractidChanged || $contractserialChanged) {
-                          $updateFields = [];
-                          if ($fileurlsChanged) {
-                              $updateFields['fileurls'] = $obj['fileurls'];
-                          }
-                          // 合同字段更新到advorder表
-                          $orderUpdateFields = [];
-                          if ($contractidChanged) {
-                              $orderUpdateFields['contractid'] = $objContractid;
-                          }
-                          if ($contractserialChanged) {
-                              $orderUpdateFields['contractserial'] = $objContractserial;
-                          }
-                          if (!empty($orderUpdateFields)) {
-                              Yii::$app->paymentdb->createCommand()->update(Advorder::tableName(), $orderUpdateFields, 'SYS_DOCUMENTID = :id', [':id' => $existingOrder['SYS_DOCUMENTID']])->execute();
-                          }
-                          if ($fileurlsChanged) {
-                              Yii::$app->paymentdb->createCommand()->update('advitem', $updateFields, 'SYS_DOCUMENTID = :id', [':id' => $advitemId])->execute();
-                          }
-                          $transaction->commit();
-                          return ['errorMessage' => '附件或合同已更新，但其它内容不能修改！若要修改，请点击订单编号重新审批'];
-                      }
+                  // 检查是否只修改了附件或合同字段
+                  $advitemId = $obj['SYS_DOCUMENTID'];
+                  $checkAdvitemSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
+                  $existingAdvitem = Yii::$app->paymentdb->createCommand($checkAdvitemSql)->bindValues([':id' => $advitemId])->queryOne();
+                  $fileurlsChanged = isset($obj['fileurls']) && $existingAdvitem['fileurls'] != $obj['fileurls'];
+                  $existingContractid = isset($existingOrder['contractid']) ? $existingOrder['contractid'] : '';
+                  $existingContractserial = isset($existingOrder['contractserial']) ? $existingOrder['contractserial'] : '';
+                  $contractidChanged = isset($objContractid) && $existingContractid != $objContractid;
+                  $contractserialChanged = isset($objContractserial) && $existingContractserial != $objContractserial;
+                  $onlyFileOrContractChanged = ($fileurlsChanged || $contractidChanged || $contractserialChanged);
 
-
-
-                      return ['errorMessage' => '该订单已生效，不能修改2！请点击订单编号重新审批，审批期间允许修改'];
-                    }
+                  // 判断是否已经生效（如果只修改附件或合同则跳过）
+                  if($existingOrder && $existingOrder['SYS_DELETEFLAG']==0 && !$onlyFileOrContractChanged) {
+                      return ['errorMessage' => '该订单已生效，不能修改！请点击订单编号重新审批，审批期间允许修改'];
                   }
                   // 更新时金额计算
                   if (isset($obj['AI_AmountReceivable'])) {
@@ -1652,44 +1693,33 @@ class AdvertisemanangeController extends ApiBase{
                       $obj['AI_AmountPaid'] = $obj['AI_Price'];
                   }
                   
-                  // 更新时检查权限
-                  $advitemId = $obj['SYS_DOCUMENTID'];
-                  $checkAdvitemSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
-                  $existingAdvitem = Yii::$app->paymentdb->createCommand($checkAdvitemSql)->bindValues([':id' => $advitemId])->queryOne();
-                  if ($existingAdvitem['SYS_DELETEFLAG']==0) {
-                    $fileurlsChanged = $existingAdvitem['fileurls'] != $obj['fileurls'];
-                    // 从advorder表检查合同字段变化
-                    $existingContractid = isset($existingOrder['contractid']) ? $existingOrder['contractid'] : '';
-                    $existingContractserial = isset($existingOrder['contractserial']) ? $existingOrder['contractserial'] : '';
-                    $contractidChanged = $existingContractid != ($objContractid ?? '');
-                    $contractserialChanged = $existingContractserial != ($objContractserial ?? '');
-                    if ($fileurlsChanged || $contractidChanged || $contractserialChanged) {
-                        $updateFields = [];
-                        if ($fileurlsChanged) {
-                            $updateFields['fileurls'] = $obj['fileurls'];
-                        }
-                        // 合同字段更新到advorder表
-                        $orderUpdateFields = [];
-                        if ($contractidChanged) {
-                            $orderUpdateFields['contractid'] = $objContractid;
-                        }
-                        if ($contractserialChanged) {
-                            $orderUpdateFields['contractserial'] = $objContractserial;
-                        }
-                        if (!empty($orderUpdateFields)) {
-                            Yii::$app->paymentdb->createCommand()->update(Advorder::tableName(), $orderUpdateFields, 'SYS_DOCUMENTID = :id', [':id' => $existingOrder['SYS_DOCUMENTID']])->execute();
-                        }
-                        if ($fileurlsChanged) {
-                            Yii::$app->paymentdb->createCommand()->update('advitem', $updateFields, 'SYS_DOCUMENTID = :id', [':id' => $advitemId])->execute();
-                        }
-                        $transaction->commit();
-                        return ['errorMessage' => '附件或合同已更新，但其它内容不能修改！若要修改，请点击广告编号重新审批'];
-                    }
-                    return array('errorMessage'=>'广告已审批无法修改，点击广告编号重审后，才能修改！');
+                  // 检查是否是广告审核角色
+                  $isAuditor = $this->checkRole('广告审核');
+                  $isCurrentMonth = $this->isCurrentMonth($existingAdvitem['AI_PublishTime']);
+
+                  // 往期广告只有审核员才能修改（如果只修改附件或合同则跳过）
+                  if (!$onlyFileOrContractChanged && !$isCurrentMonth && !$isAuditor) {
+                      return ['errorMessage' => '往期广告只有审核员才能修改'];
                   }
-                  if (!$this->checkAuthor($existingAdvitem['SYS_AUTHORS'])) {
+
+                  // 当月广告：必须本人才能修改（如果只修改附件或合同则跳过）
+                  if (!$onlyFileOrContractChanged && $isCurrentMonth && !$this->checkAuthor($existingAdvitem['SYS_AUTHORS'])) {
                       return ['errorMessage' => '只有本人才能操作'];
                   }
+
+                  // 审核员修改往期广告：检查修改次数和金额限制（如果只修改附件或合同则跳过）
+                  if (!$onlyFileOrContractChanged && !$isCurrentMonth && $isAuditor) {
+                      $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND remark LIKE :remark";
+                      $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':remark' => '%' . $advitemId . '%'])->queryOne();
+                      if ($modifyResult && $modifyResult['cnt'] > 0) {
+                          return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
+                      }
+                      // 审核员修改往期广告，不允许修改金额
+                      if (isset($obj['AI_AmountReceivable']) && $obj['AI_AmountReceivable'] != $existingAdvitem['AI_AmountReceivable']) {
+                          return ['errorMessage' => '审核员修改往期广告不允许修改金额'];
+                      }
+                  }
+
                   $obj['AI_Debt'] = max(0, $amountReceivable - ($existingAdvitem['AI_AmountReceived'] ?? 0));
                   // 计算未核销金额
                   $obj['AI_UnbalancedMoney'] =max(0, $amountReceivable - ($existingAdvitem['AI_BalancedMoney'] ?? 0));
@@ -1699,6 +1729,27 @@ class AdvertisemanangeController extends ApiBase{
                   // 只更新需要的字段，避免覆盖不需要更新的字段如fileurls
                   $updateFields = array_diff_key($obj, ['SYS_DOCUMENTID' => '']); // 排除主键字段
                   Yii::$app->paymentdb->createCommand()->update('advitem', $updateFields, 'SYS_DOCUMENTID = :id', [':id' => $advitemId])->execute();
+
+                  // 记录操作日志（对比变化）
+                  $changeDetails = [];
+                  $compareFields = ['AI_Customer' => '客户', 'AI_AmountReceivable' => '应收金额', 'AI_PublishTime' => '发布日期', 'AI_Content' => '内容'];
+                  foreach ($compareFields as $field => $label) {
+                      if (isset($obj[$field]) && isset($existingAdvitem[$field]) && $obj[$field] != $existingAdvitem[$field]) {
+                          $oldVal = $existingAdvitem[$field];
+                          $newVal = $obj[$field];
+                          // 日期格式化为年月日
+                          if ($field === 'AI_PublishTime') {
+                              $oldVal = substr($oldVal, 0, 10);
+                              $newVal = substr($newVal, 0, 10);
+                          }
+                          $changeDetails[] = $label . '由【' . $oldVal . '】变为【' . $newVal . '】';
+                      }
+                  }
+                  $changeText = empty($changeDetails) ? '广告内容变更' : implode('，', $changeDetails);
+                  $this->_operationlog([
+                      'catalog' => '修改广告',
+                      'remark' => '修改广告【' . $advitemId . '】' . $changeText
+                  ]);
               }
               
               // 只有更新订单时才重新计算订单金额
@@ -4030,6 +4081,46 @@ class AdvertisemanangeController extends ApiBase{
         
         return round(($height * $width) / $area, 4);
     }
-  
 
+    /**
+     * 获取广告操作日志
+     * @return array
+     */
+    public function actionGetadvlog()
+    {
+        $advitemid = $this->_request['advitemid'];
+        if (!$advitemid) {
+            return ['errorMessage' => 'advitemid不能为空'];
+        }
+
+        $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+        $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 10;
+        $offset = $limit * ($page - 1);
+
+        // 查询广告相关的操作日志
+        $where = "remark LIKE :advitemid";
+        $params = [':advitemid' => '%' . $advitemid . '%'];
+
+        // 查询总数
+        $countSql = "SELECT COUNT(*) as total FROM fzrbs_operation_log WHERE {$where}";
+        $countResult = Yii::$app->db->createCommand($countSql)->bindValues($params)->queryOne();
+        $total = $countResult['total'] ?? 0;
+
+        // 查询数据
+        $sql = "SELECT * FROM fzrbs_operation_log WHERE {$where} ORDER BY inserttime DESC LIMIT {$offset}, {$limit}";
+        $list = Yii::$app->db->createCommand($sql)->bindValues($params)->queryAll();
+
+        // 转换时间戳为日期格式
+        foreach ($list as &$item) {
+            $item['inserttime'] = date('Y-m-d H:i:s', $item['inserttime']);
+        }
+
+        return [
+            'data' => $list,
+            'total' => intval($total),
+            'current' => intval($page),
+            'pageSize' => intval($limit),
+            'success' => true
+        ];
+    }
 }

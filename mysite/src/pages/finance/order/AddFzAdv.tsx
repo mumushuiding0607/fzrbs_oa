@@ -176,6 +176,10 @@ const AddFzAdv: React.FC<{ data?: any, onChange?: Function }> = ({ data, onChang
   // 计算实收金额 = 刊例价 × (折扣比例 / 100)，保留两位小数
   const calculateAmountReceivable = () => {
     const price = form.getFieldValue('AI_Price') || 0;
+    // 刊例价小于等于0时，不自动计算实收金额，由用户手动输入
+    if (price <= 0) {
+      return;
+    }
     const discount = form.getFieldValue('discount') || 100;
     const amountReceivable = price * (discount / 100);
     form.setFieldsValue({
@@ -700,7 +704,6 @@ const AddFzAdv: React.FC<{ data?: any, onChange?: Function }> = ({ data, onChang
           <InputNumber
             style={{ width: '100%' }}
             placeholder="实收金额"
-            min={0}
             precision={2}
             onChange={calculateDiscount}
           />

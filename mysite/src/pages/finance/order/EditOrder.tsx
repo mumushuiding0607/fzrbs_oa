@@ -2,7 +2,7 @@ import { Divider, Spin } from 'antd';
 import React, { useEffect, useState } from 'react';
 
 import AddOrder from './AddOrder';
-import AdvitemList from './AdvitemList';
+import AdvitemList from './advitemlist';
 
 interface EditOrderProps {
   data?: any;

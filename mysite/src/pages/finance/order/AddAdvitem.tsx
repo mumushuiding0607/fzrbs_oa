@@ -260,6 +260,11 @@ const AddAdvitem: React.FC<{ data?: any, onChange?: Function }> = ({ data, onCha
 
   // 计算应收款
   const getAmount = () => {
+    const priceVal = parseFloat(AI_Price || '0');
+    // 刊例价小于等于0时，不自动计算实收金额，由用户手动输入
+    if (priceVal <= 0) {
+      return;
+    }
     const values = form.getFieldsValue();
     if (values.AI_PriceModeIC === 0) {
       // 固定单价
@@ -268,9 +273,8 @@ const AddAdvitem: React.FC<{ data?: any, onChange?: Function }> = ({ data, onCha
       // 按面积计算
       const width = parseFloat(AI_Width || '0');
       const height = parseFloat(AI_Height || '0');
-      const price = parseFloat(AI_Price || '0');
       const discount = parseFloat(values.AI_DiscountTotal || '100');
-      const amount = width * height * price * discount / 100;
+      const amount = width * height * priceVal * discount / 100;
       form.setFieldsValue({ AI_AmountReceivable: amount.toFixed(2) });
     }
   };

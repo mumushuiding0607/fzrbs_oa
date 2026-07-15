@@ -168,13 +168,16 @@ const ContractsWithProjects: React.FC<{contractids:any,visible?:boolean,onClose?
             datas.map((item:any)=>{
               return <Table
                 title={()=>{
-                  return <div style={{width:'100%',display:'flex',alignItems:'center'}}>         
+                  return <div style={{width:'100%',display:'flex',alignItems:'center'}}>
                       <div  onClick={()=>{
                         setViewmodal(true)
                         setContract(item?.contract)
                         setRefreshKey(+refreshKey)
                       }} ><span style={{...labelStyle}}>合同名称：</span><span style={{...valueStyle,color:"#1890FF"}}>{item?.contract?.title}</span></div>
                       <div ><span style={labelStyle}>合同编号：</span><span style={valueStyle}>{item?.contract?.serial}</span></div><div ><span style={labelStyle}>合同总额：</span><span style={valueStyle}>{!Number.isNaN(item?.contract?.amount)?parseFloat(item?.contract?.amount).toLocaleString('en-US', {
+        minimumFractionDigits: 2,maximumFractionDigits: 2,
+      }):0}</span></div>
+                      <div ><span style={labelStyle}>已回款：</span><span style={valueStyle}>{!Number.isNaN(item?.contract?.paycollection)?parseFloat(item?.contract?.paycollection).toLocaleString('en-US', {
         minimumFractionDigits: 2,maximumFractionDigits: 2,
       }):0}</span></div>
                       <div ><span style={labelStyle}>预算收入：</span><span style={valueStyle}>{(item?.projects||[]).reduce((acc:any, curr:any) => curr.budgetincome + acc, 0).toLocaleString('en-US', {

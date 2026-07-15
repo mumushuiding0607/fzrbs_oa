@@ -248,7 +248,7 @@ const AdvitemViewModal: React.FC<{
                 onFlowRefresh={onFlowRefresh}
               />
             </Tabs.TabPane>
-            
+
           </Tabs>
         }
         style={{ top: 20 }}

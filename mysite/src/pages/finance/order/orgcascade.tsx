@@ -18,9 +18,10 @@ interface OrgcascadeProps {
   label?: string;
   onChange?: (value: { value: string; label: string }) => void;
   multiple?: boolean;
+  placeholder?:string
 }
 
-const Orgcascade: React.FC<OrgcascadeProps> = ({ value, onChange,multiple=false }) => {
+const Orgcascade: React.FC<OrgcascadeProps> = ({ value, onChange,multiple=false, placeholder='行业部门' }) => {
   const [treeData, setTreeData] = useState<OrgNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -270,7 +271,7 @@ const Orgcascade: React.FC<OrgcascadeProps> = ({ value, onChange,multiple=false 
           allowClear
           loading={loading}
           multiple={multiple}
-          placeholder="行业部门"
+          placeholder={placeholder||'行业部门'}
           style={{ flex: 1 }}
         />
         <Button icon={<EditOutlined />} onClick={handleOpenEditModal} style={{ marginLeft: 4 }} />

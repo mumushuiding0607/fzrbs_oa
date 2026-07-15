@@ -13,7 +13,8 @@ import ProjectSelect from "../budget/project/projectSelect";
 import Filescard from "../contract/filescard";
 import ContractSelect from "../contract/contract-select";
 
-import AdvitemList from "./AdvitemList";
+import AdvitemList from "./advitemlist";
+import AdvLog from "./advlog";
 
 
 // style
@@ -100,7 +101,7 @@ const ViewModal:React.FC<{id:any,thirdNo?:any,onVisibleChange?:Function,visible:
                     <Descriptions.Item label="已收款">{(obj?.AO_ReceivedMoney||0).toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,})}</Descriptions.Item>
                     <Descriptions.Item label="欠款">{(obj?.AO_DebtMoney||0).toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,})}</Descriptions.Item>
                     <Descriptions.Item label="创建时间">{obj?.SYS_CREATED}</Descriptions.Item>
-                    
+
                 </Descriptions>
 
                 <Descriptions
@@ -110,17 +111,20 @@ const ViewModal:React.FC<{id:any,thirdNo?:any,onVisibleChange?:Function,visible:
                     labelStyle={{width:120}}
                   >
                     {
-                        obj.fileurls&&obj.fileurls!="" && 
+                        obj.fileurls&&obj.fileurls!="" &&
                         <Descriptions.Item label="附件">
                           <Filescard  urls={obj.fileurls} mode='list'/>
                       </Descriptions.Item>
                       }
                   </Descriptions>
-                  
+
                 {/* 广告列表 */}
                 <AdvitemList order={{SYS_DOCUMENTID: id}}  />
 
               </div>
+            </Tabs.TabPane>
+            <Tabs.TabPane tab="变更记录" key="3">
+              <AdvLog orderId={id} />
             </Tabs.TabPane>
           </Tabs>
           

@@ -55,8 +55,12 @@
          <div class="value">{{profit.toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,}) }}</div>
        </div>
        <div class="cell">
-         <div class="label">合同状态：</div>
+         <div class="label">合同状态</div>
          <div class="value" :style="{color:data.basic?.contractids?'#1989fa':'black'}" @click="getContract(data.basic?.contractids)">{{data.basic?.contractids?'已签':'未签' }}</div>
+       </div>
+       <div class="cell" v-if="paycollection">
+         <div class="label">合同回款</div>
+         <div class="value">{{paycollection.toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,})}}</div>
        </div>
        <Filescard v-if="contracturls" :urls="contracturls"/>
        <div v-if="data.basic?.state<=ProjectStatesEnum.BUDGET&&data.basic?.content">
@@ -163,7 +167,7 @@ export default {
   components: {
     Image,Tag,Divider,Cell,CellGroup,Steps,Step,Badge,Filescard,Field,Button,Dialog,Uploader,ActionBar,ActionBarIcon,ActionBarButton 
   },
-  props: ['thirdNo', 'projectid','state'],
+  props: ['thirdNo', 'projectid','state','paycollection'],
   data () {
     return {
       active:0,

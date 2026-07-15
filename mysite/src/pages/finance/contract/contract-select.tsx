@@ -59,7 +59,26 @@ function DebounceSelect<
           var temp = results.map((e:any)=>{
             return {label:e.title,value:e.id,...e}
           })
-          
+
+          if (temp.length > 0){
+            setDefaultValue(temp)
+            setOptions(temp)
+          }
+        })
+      }else if (value && multiple && Array.isArray(value) && value.length > 0) {
+        // 多选模式：value 是对象数组，需要提取id并查询
+        isFirstRender.current = false
+        const ids = value.map((v: any) => v.id || v.value).join(',');
+        request<{
+          data:any[]
+        }>('/api/contract/getbykeyword',{
+          method:'GET',
+          params:{id:ids}
+        }).then((results:any)=> {
+          var temp = results.map((e:any)=>{
+            return {label:e.title,value:e.id,...e}
+          })
+
           if (temp.length > 0){
             setDefaultValue(temp)
             setOptions(temp)
@@ -79,17 +98,23 @@ function DebounceSelect<
     } else {
 
       if (value) {
-        // 单选情况：根据 ID 查询数据
+        // 判断value是数组还是字符串
+        let idParam = value;
+        if (multiple && Array.isArray(value)) {
+          // 多选模式下，如果value是对象数组，提取id
+          idParam = value.map((v: any) => v.id || v.value).join(',');
+        }
+
         request<{
           data:any[]
         }>('/api/contract/getbykeyword',{
           method:'GET',
-          params:{id:value}
+          params:{id:idParam}
         }).then((results:any)=> {
           var temp = results.map((e:any)=>{
             return {label:e.title,value:e.id,...e}
           })
-          
+
           isInternalChange.current = true;
           setDefaultValue(temp[0])
           setOptions(temp)
@@ -99,7 +124,7 @@ function DebounceSelect<
             setDefaultValue(temp[0])
           }
         });
-      } 
+      }
     }
   }, [value]);
   
