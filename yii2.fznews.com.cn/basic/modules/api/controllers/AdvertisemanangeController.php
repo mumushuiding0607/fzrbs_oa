@@ -421,9 +421,9 @@ class AdvertisemanangeController extends ApiBase{
           $checkReceivedSql = "SELECT AO_ReceivedMoney FROM " . Advorder::tableName() . " WHERE SYS_DOCUMENTID = :id";
           $receivedResult = Yii::$app->paymentdb->createCommand($checkReceivedSql)->bindValues([':id' => $par['SYS_DOCUMENTID']])->queryOne();
           $amountReceived = floatval($receivedResult['AO_ReceivedMoney'] ?? 0);
-          if ($amountReceived > 0) {
-              return ['errorMessage' => '该订单已有回款，无法更新'];
-          }
+          // if ($amountReceived > 0) {
+          //     return ['errorMessage' => '该订单已有回款，无法更新'];
+          // }
           
           $par['SYS_LASTMODIFIED']=date('Y-m-d H:i:s');
          
@@ -1210,15 +1210,15 @@ class AdvertisemanangeController extends ApiBase{
           } else {
 
               // 更新广告时检查权限并获取原有日期字段
-              $checkSql = "SELECT SYS_AUTHORS, AI_PublishTime, AI_PublishEndTime, AI_OrderID FROM advitem WHERE SYS_DOCUMENTID = :id";
+              $checkSql = "SELECT SYS_AUTHORS, SYS_DELETEFLAG,AI_PublishTime, AI_PublishEndTime, AI_OrderID FROM advitem WHERE SYS_DOCUMENTID = :id";
               $existingAdvitem = Yii::$app->paymentdb->createCommand($checkSql)->bindValues([':id' => $obj['SYS_DOCUMENTID']])->queryOne();
 
               // 检查是否是广告审核角色
               $isAuditor = $this->checkRole('广告审核');
               $isCurrentMonth = $this->isCurrentMonth($existingAdvitem['AI_PublishTime']);
 
-              // 往期广告只有审核员才能修改
-              if (!$isCurrentMonth && !$isAuditor) {
+              // 往期广告且未删除的，只有审核员才能修改
+              if (!$isCurrentMonth && !$isAuditor && $existingAdvitem['SYS_DELETEFLAG'] == 0) {
                   return ['errorMessage' => '往期广告只有审核员才能修改'];
               }
 
@@ -1229,9 +1229,9 @@ class AdvertisemanangeController extends ApiBase{
 
               // 审核员修改往期广告：检查修改次数和金额限制
               if (!$isCurrentMonth && $isAuditor) {
-                  $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND remark LIKE :remark";
-                  $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':remark' => '%' . $obj['SYS_DOCUMENTID'] . '%'])->queryOne();
-                  if ($modifyResult && $modifyResult['cnt'] > 0) {
+                  $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
+                  $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':userid' => $this->_adminInfo['id'], ':remark' => '%' . $obj['SYS_DOCUMENTID'] . '%'])->queryOne();
+                  if ($modifyResult && $modifyResult['cnt'] > 1) {
                       return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
                   }
                   // 审核员修改往期广告，不允许修改金额
@@ -1676,10 +1676,12 @@ class AdvertisemanangeController extends ApiBase{
                   $contractserialChanged = isset($objContractserial) && $existingContractserial != $objContractserial;
                   $onlyFileOrContractChanged = ($fileurlsChanged || $contractidChanged || $contractserialChanged);
 
+                  
+
                   // 判断是否已经生效（如果只修改附件或合同则跳过）
-                  if($existingOrder && $existingOrder['SYS_DELETEFLAG']==0 && !$onlyFileOrContractChanged) {
-                      return ['errorMessage' => '该订单已生效，不能修改！请点击订单编号重新审批，审批期间允许修改'];
-                  }
+                  // if($existingOrder && $existingOrder['SYS_DELETEFLAG']==0 && !$onlyFileOrContractChanged) {
+                  //     return ['errorMessage' => '该订单已生效，不能修改！请点击订单编号重新审批，审批期间允许修改'];
+                  // }
                   // 更新时金额计算
                   if (isset($obj['AI_AmountReceivable'])) {
                       $amountReceivable = $obj['AI_AmountReceivable'];
@@ -1696,9 +1698,15 @@ class AdvertisemanangeController extends ApiBase{
                   // 检查是否是广告审核角色
                   $isAuditor = $this->checkRole('广告审核');
                   $isCurrentMonth = $this->isCurrentMonth($existingAdvitem['AI_PublishTime']);
+                  // 往期广告合同变更且客户变化时，通知之前的审批人
+                  if (!$isCurrentMonth  && ($contractidChanged || $contractserialChanged)) {
+            
+                      $this->notifyContractCustomerChange($existingAdvitem, $obj, $existingOrder['contractserial']);
+                  }
+            
 
-                  // 往期广告只有审核员才能修改（如果只修改附件或合同则跳过）
-                  if (!$onlyFileOrContractChanged && !$isCurrentMonth && !$isAuditor) {
+                  // 往期广告且未删除的，只有审核员才能修改（如果只修改附件或合同则跳过）
+                  if (!$onlyFileOrContractChanged && !$isCurrentMonth && !$isAuditor && $existingAdvitem['SYS_DELETEFLAG'] == 0) {
                       return ['errorMessage' => '往期广告只有审核员才能修改'];
                   }
 
@@ -1709,9 +1717,9 @@ class AdvertisemanangeController extends ApiBase{
 
                   // 审核员修改往期广告：检查修改次数和金额限制（如果只修改附件或合同则跳过）
                   if (!$onlyFileOrContractChanged && !$isCurrentMonth && $isAuditor) {
-                      $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND remark LIKE :remark";
-                      $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':remark' => '%' . $advitemId . '%'])->queryOne();
-                      if ($modifyResult && $modifyResult['cnt'] > 0) {
+                      $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
+                      $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':userid' => $this->_adminInfo['id'], ':remark' => '%' . $advitemId . '%'])->queryOne();
+                      if ($modifyResult && $modifyResult['cnt'] > 1) {
                           return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
                       }
                       // 审核员修改往期广告，不允许修改金额
@@ -4122,5 +4130,47 @@ class AdvertisemanangeController extends ApiBase{
             'pageSize' => intval($limit),
             'success' => true
         ];
+    }
+
+    /**
+     * 合同变更客户变化通知
+     * 当往期广告绑定的合同变更时，比较新旧客户是否不同，如不同则通知之前审批人
+     * @param array $existingAdvitem 原广告数据
+     * @param int|string $newContractId 新关联的合同ID
+     * @param array $existingOrder 原订单数据
+     * @param array $newAdvitem 新广告数据（含新客户AI_Customer）
+     */
+    private function notifyContractCustomerChange($existingAdvitem, $newAdvitem, $contractserial)
+    {
+        $oldCustomer = $existingAdvitem['AI_Customer'] ?? '';
+        $newCustomer = $newAdvitem['AI_Customer'] ?? '';
+        // 客户没变化，不需要通知
+        if ($oldCustomer == $newCustomer) {
+     
+            return;
+        }
+
+        // 没有thirdNo说明没提交过审批，不需要通知
+        if (empty($existingAdvitem['thirdNo'])) {
+   
+            return;
+        }
+
+        // 从weixin_oa_approval_log表查询该广告的历史审批人
+        $approvalLogSql = "SELECT DISTINCT userId FROM weixin_oa_approval_log WHERE thirdNo = :thirdNo AND agentid = :agentId";
+        $approvalUsers = Yii::$app->db->createCommand($approvalLogSql)->bindValues([
+            ':thirdNo' => $existingAdvitem['thirdNo'],
+            ':agentId' => $this->agentId
+        ])->queryColumn();
+
+        if (!$approvalUsers) {
+          
+            return;
+        }
+
+        $userIds = implode('|', $approvalUsers);
+        $title = '合同号【'.$contractserial.'】,客户由【' . $oldCustomer . '】变为【' . $newCustomer . '】';
+  
+        $this->sendadv($userIds, $title, $newAdvitem);
     }
 }

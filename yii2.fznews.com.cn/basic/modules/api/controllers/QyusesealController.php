@@ -1009,7 +1009,8 @@ class QyusesealController extends ApiBase{
   public function actionList(){
 
     $userid = $this->_adminInfo['wxuserid'];
-    
+    $isAdmin = isset($this->_adminInfo['usertype']) && $this->_adminInfo['usertype'] == 1;
+
     $total = 0;
     $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
     $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
@@ -1024,7 +1025,10 @@ class QyusesealController extends ApiBase{
     if ($this->_request['userid']){
       $userid=$this->_request['userid'];
     }
-    $where[] = ['u.userId' => $userid];
+    // 非管理员只能看到自己的数据
+    if (!$isAdmin) {
+      $where[] = ['u.userId' => $userid];
+    }
 
 
     if ($this->_request['status']){

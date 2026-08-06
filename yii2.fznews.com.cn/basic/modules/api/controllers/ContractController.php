@@ -213,8 +213,9 @@ class ContractController extends ApiBase{
       
       for($i=0;$i<sizeof($c['payconditions']);$i++){
         $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$c['payconditions'][$i]['contractid']],['<=','date',$c['payconditions'][$i]['date']]])->one();
+        
         $c['payconditions'][$i]['current'] = $total['amount']&&$c['amount']?intval($total['amount']/$c['amount']*100):0;
-       
+
       }
       if ($c['supplementary']){
         $c['supplementary'] = json_decode($c['supplementary'],true);

@@ -16,6 +16,7 @@ import UsesealTemplateList from './usesealtemplatelist';
 import Orderlist from './orderlist';
 import PreViewFlow from '../budget/flow/previewflow';
 import { useHistory } from 'umi';
+import TransferApproval from './TransferApproval';
 
 const Flowtemplate: React.FC = () => {
   const listRef = useRef<any>();
@@ -32,6 +33,7 @@ const Flowtemplate: React.FC = () => {
   const [usesealmodal,setUsesealmodal]=useState(false)
   const [ordermodal,setOrdermodal]=useState(false)
   const [preViewmodal,setPreViewmodal] = useState(false)
+  const [transferModal,setTransferModal]=useState(false)
   const history = useHistory<any>() as any;
   const thirdNoFromUrl = history.location?.query?.thirdNo || '';
 
@@ -86,6 +88,7 @@ const Flowtemplate: React.FC = () => {
        <Button onClick={() => setOrdermodal(true)}>订单审批流程</Button>
        <Button onClick={() => setPreViewmodal(true)}>预览流程</Button>
       <Button onClick={() => setViewmodal(true)}>审批查询</Button>
+      <Button onClick={() => setTransferModal(true)}>审批转交</Button>
     </div>}
     >
       <Affix offsetTop={0} style={{ position: 'fixed', bottom: 0, left: 0, zIndex: 100 }}>
@@ -213,6 +216,7 @@ const Flowtemplate: React.FC = () => {
       </Modal>
       <ViewFlow thirdNo={viewFlowThirdNo} onVisibleChange={(v:boolean)=>{setViewmodal(v);if(!v)setViewFlowThirdNo('')}} visible={viewmodal}/>
       <PreViewFlow onVisibleChange={setPreViewmodal} visible={preViewmodal}/>
+      <TransferApproval visible={transferModal} onVisibleChange={setTransferModal} />
     </PageContainer>
     
   );

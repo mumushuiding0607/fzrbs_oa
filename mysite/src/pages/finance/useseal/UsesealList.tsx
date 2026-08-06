@@ -5,6 +5,7 @@ import {
 import { Button, Modal, Tag } from 'antd';
 import { useRef, useState } from 'react';
 import { usesealList, exportUsesealList, cancelUseseal } from './service';
+import ViewFlow from '../Flowtemplate/viewflow';
 import * as XLSX from 'xlsx';
 
 const statusEnum = {
@@ -18,6 +19,8 @@ const UsesealList: React.FC = () => {
   const proTableFormRef = useRef<ProFormInstance>();
   const actionRef = useRef<ActionType>();
   const [params, setParams] = useState<any>({});
+  const [flowModalVisible, setFlowModalVisible] = useState(false);
+  const [selectedThirdNo, setSelectedThirdNo] = useState<string>('');
 
   const columns: ProFormColumnsType<any>[] = [
     {
@@ -30,6 +33,12 @@ const UsesealList: React.FC = () => {
       title: '申请单号',
       dataIndex: 'thirdNo',
       width: 150,
+      render: (_, record) => (
+        <a onClick={() => {
+          setSelectedThirdNo(record.thirdNo);
+          setFlowModalVisible(true);
+        }}>{record.thirdNo}</a>
+      ),
     },
     {
       title: '申请人',
@@ -146,39 +155,47 @@ const UsesealList: React.FC = () => {
   };
 
   return (
-    <ProTable
-      style={{ minHeight: 'calc(100vh - 180px)' }}
-      headerTitle="用印审批单管理"
-      actionRef={actionRef}
-      params={params}
-      formRef={proTableFormRef}
-      rowKey={(record: any) => record.id}
-      search={{
-        labelWidth: 'auto',
-        defaultCollapsed: false,
-      }}
-      columns={columns}
-      request={async (params) => {
-        const res = await usesealList(params);
-        return {
-          data: res.data,
-          total: res.total,
-          success: true,
-        };
-      }}
-      toolbar={{
-        actions: [
-          <Button key="export" type="primary" onClick={handleExport}>
-            导出Excel
-          </Button>,
-        ],
-      }}
-      pagination={{
-        pageSize: 20,
-        showQuickJumper: true,
-        showSizeChanger: true,
-      }}
-    />
+    <>
+      <ProTable
+        style={{ minHeight: 'calc(100vh - 180px)' }}
+        headerTitle="用印审批单管理"
+        actionRef={actionRef}
+        params={params}
+        formRef={proTableFormRef}
+        rowKey={(record: any) => record.id}
+        search={{
+          labelWidth: 'auto',
+          defaultCollapsed: false,
+        }}
+        columns={columns}
+        request={async (params) => {
+          const res = await usesealList(params);
+          return {
+            data: res.data,
+            total: res.total,
+            success: true,
+          };
+        }}
+        toolbar={{
+          actions: [
+            <Button key="export" type="primary" onClick={handleExport}>
+              导出Excel
+            </Button>,
+          ],
+        }}
+        pagination={{
+          pageSize: 20,
+          showQuickJumper: true,
+          showSizeChanger: true,
+        }}
+      />
+      <ViewFlow
+        thirdNo={selectedThirdNo}
+        visible={flowModalVisible}
+        onVisibleChange={setFlowModalVisible}
+        agentid={1000065}
+      />
+    </>
   );
 };
 

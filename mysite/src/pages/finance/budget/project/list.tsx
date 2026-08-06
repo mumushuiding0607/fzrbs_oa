@@ -9,7 +9,7 @@ import Apply from '../budget/apply';
 import { useHistory } from 'react-router-dom';
 import ProTable from '@ant-design/pro-table';
 import type {  TableListPagination } from './data';
-import { delproject, getlist, lockpro, submitmeasure } from './service';
+import { delproject, getlist, lockpro, submitmeasure, reactivateflow } from './service';
 
 import moment from 'moment';
 import ProjectDetail from './projectdetail';
@@ -36,38 +36,37 @@ import EditCreatorButton from './EditCreatorButton';
 // 项目列表
 const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
   const history = useHistory() as any;
-  const [modal1, setModal1] = useState(false)
   const [approvalstate,setApprovalstate]=useState(-1)
   const [issubmitted,setIssubmitted]=useState(-1)
-  const [showModal, setShowModal] = useState(false)
   var [refreshKey, setRefreshKey]= useState(0)
   var [refreshKey2, setRefreshKey2]= useState(100)
   const location = useLocation() as any;
   const [project, setProject] = useState<any>({id:0})
-  const [modal2, setModal2] = useState(false)
   const actionRef = useRef<ActionType>();
   const proTableFormRef = useRef<ProFormInstance>();
   const [params, setParams] = useState<any>({})
   const { RangePicker } = DatePicker;
   const { initialState } = useModel<any>('@@initialState');
 
-  const [printModal,setPrintModal]=useState(false)
   const [open, setOpen] = useState(false);
   const [type,setType]=useState(location.query.protype||-1)
   const [types,setTypes]=useState<any>([])
   var [radiokey,setRadiokey]=useState(0)
-  const [addincomeModal,setAddincomeModal]=useState(false)
   const [balancetype,setBalancetype]=useState(BalanceTypes.INCOME)
   var [incomelistkey,setIncomelistkey]=useState(0)
   const [tabs, setTabs]=useState<any>([])
 
-  const [contractids,setContractids]=useState(false)
-  const [showProjects,setShowProjects] = useState(false)
   const [stat,setStat]=useState<any>([])
   const [loading,setLoading]=useState(false)
   const [searchStat,setSearchStat]=useState<any>([])
 
   const [refreshStat,setRefreshStat]=useState(1)
+
+  // 统一弹窗状态管理
+  const [modal, setModal] = useState<{
+    type: 'add' | 'preview' | 'detail' | 'print' | 'addincomes' | 'contracts' | null;
+    data?: any;
+  }>({ type: null });
   useEffect(()=>{
     getdictlist({type:'审批类型',agentid:AGENTID,orderby:'value asc'}).then((res:any)=>{
       setTabs(res.data||[])
@@ -263,10 +262,10 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
       render: (text:any,record:any)=>(
         <>
           <Button type="link" onClick={()=>{
-            setAddincomeModal(true)
             setProject(record)
             setBalancetype(BalanceTypes.INCOME)
             setIncomelistkey(++incomelistkey)
+            setModal({ type: 'addincomes', data: record })
             }}>
             {!Number.isNaN(text)?parseFloat(text).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -287,10 +286,10 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
       render: (text:any,record:any)=>(
         <>
           <Button type="link" onClick={()=>{
-              setAddincomeModal(true)
               setProject(record)
               setBalancetype(BalanceTypes.INCOME)
               setIncomelistkey(++incomelistkey)
+              setModal({ type: 'addincomes', data: record })
            }}>
             {!Number.isNaN(text)?parseFloat(text).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -311,10 +310,10 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
       render: (text:any,record:any)=>(
         <>
           <Button type="link" onClick={()=>{
-            setAddincomeModal(true)
             setProject(record)
             setBalancetype(BalanceTypes.EXPEND)
             setIncomelistkey(++incomelistkey)
+            setModal({ type: 'addincomes', data: record })
           }}>
             {!Number.isNaN(text)?parseFloat(text).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -335,10 +334,10 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
       render: (text:any,record:any)=>(
         <>
           <Button type="link" onClick={()=>{
-            setAddincomeModal(true)
             setProject(record)
             setBalancetype(BalanceTypes.EXPEND)
             setIncomelistkey(++incomelistkey)
+            setModal({ type: 'addincomes', data: record })
           }}>
             {!Number.isNaN(text)?parseFloat(text).toLocaleString('en-US', {
         minimumFractionDigits: 2,
@@ -557,6 +556,28 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
                       
                     }}>提交计量</Button>
                   }
+
+                  <Button type="text" onClick={()=>{
+                      Modal.confirm({
+                        title:'确认勘误申请？',
+                        content:'重新激活流程，添加经审小组审批节点',
+                        onOk:()=>{
+                          reactivateflow({projectid:record.id}).then((res:any)=>{
+                            if (res.errorMessage) {
+                              Modal.error({
+                                title: '报错',
+                                content: res.errorMessage,
+                              });
+                            } else {
+                              Modal.success({
+                                title: '勘误申请成功'
+                              });
+                              actionRef.current?.reload()
+                            }
+                          })
+                        }
+                      })
+                    }}>勘误申请</Button>
             
                   <Button  type="link" onClick={()=>{
           
@@ -608,7 +629,7 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
       case '更新':
         setRefreshKey(++refreshKey)
         setProject(record)
-        setModal1(true)
+        setModal({ type: 'add', data: record })
         break;
       case '删除':
         Modal.confirm({
@@ -630,19 +651,17 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
         record.act = record.state
         setRefreshKey(++refreshKey)
         setProject(record)
-        setModal2(true)
-
-
+        setModal({ type: 'preview', data: record })
         break
       case '打印':
 
         setProject(record)
-        setPrintModal(true)
+        setModal({ type: 'print', data: record })
         break;
       case '流程':
         setRefreshKey(++refreshKey)
         setProject(record)
-        setModal2(true)
+        setModal({ type: 'preview', data: record })
         break
       case '提交计量':
         Modal.confirm({
@@ -662,8 +681,7 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
         break
         case '查看合同关联项目':
           setRefreshKey(++refreshKey)
-          setContractids(record.contractids)
-          setShowProjects(true)
+          setModal({ type: 'contracts', data: record.contractids })
           break
       default:
         break;
@@ -973,8 +991,8 @@ useEffect(()=>{
               key="primary"
               onClick={() => {
                 setRefreshKey(++refreshKey)
-                setModal1(true)
-                setProject({hascontract:1})
+                setProject({})
+                setModal({ type: 'add', data: {hascontract:1} })
               }}
             >
               <PlusOutlined /> 新建
@@ -988,46 +1006,51 @@ useEffect(()=>{
                       if (tableContent){
                         tableContent.scrollLeft = scroll;
                       }
-          
-                }} />
-      <Addincome key={'addincome'+incomelistkey} visible={addincomeModal} balancetype={balancetype}  pid={project.id} onClose={()=>{
-        setAddincomeModal(false)
-      }}/>
-      <ContractsWithProjects key={'合同'+contractids}  contractids={contractids} visible={showProjects} onClose={()=>setShowProjects(false)}/>
 
-      <Addpro key={'addpro'+refreshKey} onChange={addprosuc} visible={modal1} data={project} onVisibleChange={setModal1}/>
-     
+                }} />
+      {/* 收入/支出列表 */}
+      <Addincome key={'addincome'+incomelistkey} visible={modal.type === 'addincomes'} balancetype={balancetype}  pid={modal.data?.id || project.id} onClose={()=>{
+        setModal({ type: null })
+      }}/>
+      {/* 合同关联项目 */}
+      <ContractsWithProjects key={'合同'+modal.data} contractids={modal.data} visible={modal.type === 'contracts'} onClose={()=>setModal({ type: null })}/>
+      {/* 新建/编辑项目 */}
+      <Addpro key={'addpro'+refreshKey} onChange={addprosuc} visible={modal.type === 'add'} data={project} onVisibleChange={(v:boolean)=>!v && setModal({ type: null })}/>
+
+      {/* 详情预览 */}
       <Modal
         key={refreshKey}
         title="详情预览"
         style={{ top: 20 }}
         width="60vw"
-        visible={modal2}
-        onOk={() => setModal2(false)}
-        onCancel={() => setModal2(false)}
+        visible={modal.type === 'preview'}
+        onOk={() => setModal({ type: null })}
+        onCancel={() => setModal({ type: null })}
         footer={null}
       >
         <Apply key={refreshKey} data={project}  onchange={onApplyChange}/>
       </Modal>
+      {/* 项目内容 */}
       <Modal
         title="项目内容"
         key="m2"
         style={{ top: 20, }}
         width={'80%'}
-        visible={showModal}
-        onOk={() => setShowModal(false)}
-        onCancel={() => setShowModal(false)}
+        visible={modal.type === 'detail'}
+        onOk={() => setModal({ type: null })}
+        onCancel={() => setModal({ type: null })}
         footer={null}
       >
         <ProjectDetail key={refreshKey2} id={project.id}></ProjectDetail>
       </Modal>
+      {/* 打印 */}
       <Modal
         title=""
         style={{ top: 0,left:0, aspectRatio: '210/297'}}
         width={'80vw'}
-        visible={printModal}
-        onOk={() => setPrintModal(false)}
-        onCancel={() => setPrintModal(false)}
+        visible={modal.type === 'print'}
+        onOk={() => setModal({ type: null })}
+        onCancel={() => setModal({ type: null })}
         footer={null}
       >
         <Print record={project} key={project.id}/>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Avatar, Typography,Steps,Card, Divider, Modal, Button, Tag, Descriptions,Tabs  } from 'antd';
 import './costom.css'
-import { getflowinfo,flowact, getfileurlsbycontractids, restartflow } from './service';
+import { getflowinfo,flowact, restartflow } from './service';
 import { currentUser } from '@/services/ant-design-pro/api';
 import { useModel } from 'umi';
 import TextArea from 'antd/lib/input/TextArea';
@@ -13,6 +13,7 @@ import Offlineagree from './offlineagree';
 import Print from './print';
 import Budgetdetail from './budgetdetail';
 import ViewFlow from '../../Flowtemplate/viewflow';
+import ContractsWithProjects from '../project/contractsWithProjects';
 const { TabPane } = Tabs;
 // style
 const row:React.CSSProperties = {
@@ -73,6 +74,7 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
   const [approve,setApprove]=useState(false)
   const[viewflowmodal,setViewflowmodal]=useState(false)
   const [reset,setReset]=useState(false)
+  const [contractsModal,setContractsModal]=useState(false)
   useEffect(()=>{
     getflowinfo({thirdNo:thirdno,projectid,state}).then((res:any)=>{
       
@@ -94,9 +96,9 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
           setStep(res.viewdata.step+1)
           var node = res.viewdata.approval[res.viewdata.step+1]
           var temp = false
-          if (node.NodeStatus==2){
+          if (node && node.NodeStatus==2){
             temp=true
-          }else{
+          }else if (node) {
             var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
             if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
           }
@@ -189,9 +191,9 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
                 setStep(res.viewdata.step+1)
                 var node = res.viewdata.approval[res.viewdata.step+1]
                 var temp = false
-                if (node.NodeStatus==2){
+                if (node && node.NodeStatus==2){
                   temp=true
-                }else{
+                }else if (node) {
                   var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
                   if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
                 }
@@ -241,12 +243,12 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
                   Modal.confirm({
                     title: '确定要继续审批吗？',
                     onOk() {
-                      restartflow({thirdNo: thirdno, agentid: AGENTID}).then((res:any) => {
+                      restartflow({thirdNo: basic.thirdNo || thirdno, agentid: AGENTID}).then((res:any) => {
                         if (res.errorMessage) {
                           Modal.error({ title: res.errorMessage });
                         } else {
                           Modal.info({ title: '操作成功！' });
-                          getflowinfo({thirdNo:thirdno,projectid,state}).then((res:any)=>{
+                          getflowinfo({thirdNo:basic.thirdNo || thirdno,projectid,state}).then((res:any)=>{
                             if (res.errorMessage) {
                               Modal.error({
                                 title: '报错',
@@ -263,9 +265,9 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
                                 setStep(res.viewdata.step+1)
                                 var node = res.viewdata.approval[res.viewdata.step+1]
                                 var temp = false
-                                if (node.NodeStatus==2){
+                                if (node && node.NodeStatus==2){
                                   temp=true
-                                }else{
+                                }else if (node) {
                                   var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
                                   if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
                                 }
@@ -356,12 +358,9 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
                       <Descriptions.Item label="毛利润">{profit.toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,})}</Descriptions.Item>
                       <Descriptions.Item label="合同状态">
                         {
-                          basic.contractids && 
+                          basic.contractids &&
                           <a href='#' onClick={()=>{
-                            getfileurlsbycontractids({contractids:basic.contractids}).then((res=>{
-                              setUrls(res.data||'')
-                              setModal2(true)
-                            }))
+                            setContractsModal(true)
                           }}>
                             已签
                           </a>
@@ -550,13 +549,14 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
               onCancel={() => setModal2(false)}
               footer={null}
             >
-              
+
               <Filescard key={urls} urls={urls}/>
             </Modal>
+            <ContractsWithProjects contractids={basic.contractids} visible={contractsModal} onClose={()=>setContractsModal(false)}/>
         </div>
         }
     </div>
-    
+
   )
 }
 

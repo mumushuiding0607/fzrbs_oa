@@ -282,6 +282,15 @@ export async function delflownode(
   })
 }
 
+export async function alterflownodefileurls(
+  params:{thirdNo?:any,agentid?:any,step:any,fileurls:any}
+){
+  return request<{errorMessage:string}>('/api/financerole/alterflownodefileurls',{
+    method: 'POST',
+    data:{...params}
+  })
+}
+
 export async function flowalter(
   params:any
 ){
@@ -360,4 +369,24 @@ export async function getcommonflow(
     method: 'GET',
     params:{...params}
   })
+}
+
+export async function getPendingCount(params: { userid?: string; agentid?: number }) {
+  return request<{ data: number }>('/api/financerole/getpendingcount', {
+    method: 'GET',
+    params,
+  });
+}
+
+export async function transferApproval(data: { fromUserid: string; toUserid: string; agentid?: number }) {
+  return request<{ data: { successCount: number } }>('/api/financerole/transferapproval', {
+    data,
+    method: 'POST',
+  });
+}
+
+export async function getappoptions() {
+  return request<any[]>('/api/financerole/getappoptions', {
+    method: 'GET',
+  });
 }

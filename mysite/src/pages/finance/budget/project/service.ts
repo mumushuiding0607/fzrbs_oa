@@ -306,6 +306,15 @@ export async function altercreator(data: {}, options?: { [key: string]: any }) {
   });
 }
 
+// 重新激活已完成流程（勘误申请）
+export async function reactivateflow(data: {}, options?: { [key: string]: any }) {
+  return request('/api/budget/reactivateflow', {
+    data,
+    method: 'POST',
+    ...(options || {}),
+  });
+}
+
 
 
 

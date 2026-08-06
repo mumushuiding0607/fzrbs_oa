@@ -32,6 +32,7 @@ const { RangePicker } = DatePicker;
 const dateFormat = 'YYYY-MM-DD';
 const Addbalance:React.FC<{data:any,onChange:Function}> = ({data,onChange}) =>{
   const [form] = Form.useForm();
+  const [submitting,setSubmitting] = useState(false);
   const { initialState } = useModel('@@initialState');
   const { currentUser } = initialState;
 
@@ -67,7 +68,9 @@ const Addbalance:React.FC<{data:any,onChange:Function}> = ({data,onChange}) =>{
       values.department = currentUser.department
     }
     console.log(values)
+    setSubmitting(true)
     save(values).then((res)=>{
+      setSubmitting(false)
       if (res.errorMessage) {
         Modal.error({
           title: '报错',
@@ -76,7 +79,7 @@ const Addbalance:React.FC<{data:any,onChange:Function}> = ({data,onChange}) =>{
       } else {
         onChange(res.data)
       }
-      
+
     })
     
     
@@ -137,7 +140,7 @@ const Addbalance:React.FC<{data:any,onChange:Function}> = ({data,onChange}) =>{
 
         <Form.Item {...tailLayout}>
           <Space>
-            <Button type="primary" htmlType="submit">
+            <Button type="primary" htmlType="submit" loading={submitting}>
               {data.id?'更新':'创建'}
             </Button>
             <Button htmlType="button" onClick={onReset}>

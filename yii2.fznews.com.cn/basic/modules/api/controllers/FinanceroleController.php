@@ -26,6 +26,7 @@ use app\modules\api\models\WeixinOaUsertag;
 use app\modules\api\models\WeixinUsesealTemplate;
 use app\modules\api\models\WeixinYxkhTemplate;
 use app\modules\api\models\WeixinOrderTemplate;
+use app\modules\api\models\WeixinUsesealApprovaldata;
 use Exception;
 use yii\db\Expression;
 
@@ -968,6 +969,9 @@ class FinanceroleController extends ApiBase{
         case 1000063:
           $temp = WeixinFlowApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
           break;
+        case 1000065:
+          $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+          break;
         
         default:
           $temp = WeixinOaApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
@@ -975,7 +979,9 @@ class FinanceroleController extends ApiBase{
       }
       
       if (!$temp){
-        return array('errorMessage'=>'无此单号');
+        $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+        if (!$temp) return array('errorMessage'=>'无此单号');
+        
       }
       if (sizeof($temp)>1){
         return array('errorMessage'=>'单号重复');
@@ -1079,10 +1085,7 @@ class FinanceroleController extends ApiBase{
     if (!$data){
       return array('errorMessage'=>'无此单号');
     }
-    $hasauth = $this->hasRole('流程设置','');
-    if (!$hasauth) {
-      return array('errorMessage'=>'需要【流程设置】角色');
-    }
+ 
  
 
     $flow = WeixinOaApprovaldata::find()->where(['agentid'=>$agentid,'thirdNo'=>$thirdNo])->one();
@@ -1355,9 +1358,74 @@ class FinanceroleController extends ApiBase{
     } catch (\Throwable $th) {
       return array('errorMessage'=>$th->getMessage());
     }
-    
+
      return array('errorMessage'=>'');
   }
+
+  public function actionAlterflownodefileurls() {
+    $thirdNo = $this->_request['thirdNo'];
+    $step = $this->_request['step'];
+    $fileurls = $this->_request['fileurls'];
+    $agentid = $this->_request['agentid'];
+
+    if (!$thirdNo) {
+      return array('errorMessage' => 'thirdNo 不能为空');
+    }
+    if ($step === null || $step === '') {
+      return array('errorMessage' => 'step 不能为空');
+    }
+
+    try {
+      $where = ['thirdNo' => $thirdNo];
+      if ($agentid) {
+        $where['agentid'] = $agentid;
+      }
+      $flow = WeixinOaApprovaldata::find()->where($where)->one();
+
+      if (!$flow) {
+        return array('errorMessage' => '审批数据不存在');
+      }
+
+      // 检查流程是否已完成
+      $flowdata = json_decode($flow['data'], true);
+      if ($flow['status'] == 2 || $flowdata['data']['OpenSpstatus'] == 2) {
+        return array('errorMessage' => '审批流程已完成，禁止修改附件');
+      }
+
+      // 检查是否为发起人
+      $applyUserId = $flowdata['data']['ApplyUserId'];
+      if ($applyUserId != $this->userinfo['userid']) {
+        return array('errorMessage' => '只有流程发起人才能更新附件');
+      }
+
+      $node = &$flowdata['data']['ApprovalNodes']['ApprovalNode'][$step];
+
+      if (!$node) {
+        return array('errorMessage' => '审批节点[' . $step . ']不存在');
+      }
+
+      // 记录原始附件
+      $oldFileurls = $node['fileurls'] ?? '';
+
+      // 更新 fileurls
+      $node['fileurls'] = $fileurls;
+
+      $flow->data = json_encode($flowdata);
+      $flow->save();
+
+      // 记录操作日志
+      $this->_operationlog([
+        'catalog' => '审批附件更新',
+        'remark' => "[thirdNo:{$thirdNo}] 节点[{$step}]更新了附件\n原始附件：{$oldFileurls}\n新附件：{$fileurls}"
+      ]);
+
+    } catch (\Throwable $th) {
+      return array('errorMessage' => $th->getMessage());
+    }
+
+    return array('errorMessage' => '');
+  }
+
   public function actionFlowback(){
     
 
@@ -2228,6 +2296,142 @@ class FinanceroleController extends ApiBase{
     }
     $transaction->commit();
     return array('data'=>['ret'=>1]);
+  }
+
+  /**
+   * 获取待转交数量统计
+   * @params userid 用户userid
+   * @params agentid 可选，不传则查全部应用
+   */
+  public function actionGetpendingcount()
+  {
+    $userid = $this->_request['userid'] ?? $this->_adminInfo['wxuserid'];
+    $agentid = $this->_request['agentid'];
+
+    $where = ['and', ['=', 'status', 1]];
+    if ($agentid) {
+      $where[] = ['=', 'agentid', $agentid];
+    }
+
+    $flows = WeixinOaApprovaldata::find()->where($where)->all();
+    $count = 0;
+    foreach ($flows as $flow) {
+      $flowdata = json_decode($flow->data, true);
+      if (!$flowdata || !isset($flowdata['data']['ApprovalNodes']['ApprovalNode'])) continue;
+      $nodes = $flowdata['data']['ApprovalNodes']['ApprovalNode'];
+      foreach ($nodes as $node) {
+        if (!isset($node['Items']['Item'])) continue;
+        foreach ($node['Items']['Item'] as $item) {
+          if ($item['ItemUserId'] == $userid && $item['ItemStatus'] == 1) {
+            $count++;
+          }
+        }
+      }
+    }
+
+    return array('data' => $count);
+  }
+
+  /**
+   * 执行审批转交 - 将指定用户的待审批转给其他人
+   * @params fromUserid 转出人userid
+   * @params toUserid 接收人userid
+   * @params agentid 可选，不传则转全部应用
+   */
+  public function actionTransferapproval()
+  {
+    $fromUserid = $this->_request['fromUserid'];
+    $toUserid = $this->_request['toUserid'];
+    $agentid = $this->_request['agentid'];
+
+    if (!$fromUserid) {
+      return array('errorMessage' => 'fromUserid 不能为空');
+    }
+    if (!$toUserid) {
+      return array('errorMessage' => 'toUserid 不能为空');
+    }
+
+    $fromUser = $this->getUserinfo($fromUserid);
+    if (!$fromUser) {
+      return array('errorMessage' => 'fromUserid：[' . $fromUserid . ']不存在');
+    }
+
+    $toUser = $this->getUserinfo($toUserid);
+    if (!$toUser) {
+      return array('errorMessage' => 'toUserid：[' . $toUserid . ']不存在');
+    }
+
+    $where = ['and', ['=', 'status', 1]];
+    if ($agentid) {
+      $where[] = ['=', 'agentid', $agentid];
+    }
+
+    $flows = WeixinOaApprovaldata::find()->where($where)->all();
+    $successCount = 0;
+
+    foreach ($flows as $flow) {
+      $flowdata = json_decode($flow->data, true);
+      if (!$flowdata || !isset($flowdata['data']['ApprovalNodes']['ApprovalNode'])) continue;
+
+      $changed = false;
+      $nodes = &$flowdata['data']['ApprovalNodes']['ApprovalNode'];
+      foreach ($nodes as $nodeIndex => &$node) {
+        if (!isset($node['Items']['Item'])) continue;
+        foreach ($node['Items']['Item'] as $itemIndex => &$item) {
+          if ($item['ItemUserId'] == $fromUserid && $item['ItemStatus'] == 1) {
+            // 替换为接收人
+            $item['ItemName'] = $toUser['name'];
+            $item['ItemParty'] = '';
+            $item['ItemImage'] = $toUser['avatar'];
+            $item['ItemUserId'] = $toUser['userid'];
+            $item['ItemStatus'] = 1;
+            $item['ItemSpeech'] = '';
+            $item['ItemOpTime'] = 0;
+            $node['FromUserid'] = $fromUserid;
+            $node['FromUsername'] = $fromUser['name'];
+            $changed = true;
+            // 不break，继续处理该flow中所有匹配的item
+          }
+        }
+      }
+
+      if ($changed) {
+        $flow->data = json_encode($flowdata);
+        $flow->save();
+
+        // 更新 WeixinOaApprovalInfo
+        switch ($flow->agentid) {
+          case 1000066:
+            $info = WeixinFinanceInfo::find()->where(['thirdNo' => $flow->thirdNo])->one();
+            break;
+          default:
+            $info = WeixinOaApprovalInfo::find()->where(['thirdNo' => $flow->thirdNo, 'agentId' => $flow->agentid])->one();
+            break;
+        }
+        if ($info && $info->approvalUserid) {
+          $users = explode('|', $info->approvalUserid);
+          $names = explode('|', $info->approvalUsername);
+          $newUsers = [];
+          $newNames = [];
+          foreach ($users as $i => $u) {
+            if ($u == $fromUserid) {
+              $newUsers[] = $toUserid;
+              $newNames[] = $toUser['name'];
+            } else {
+              $newUsers[] = $u;
+              $newNames[] = $names[$i] ?? '';
+            }
+          }
+          $info->approvalUserid = implode('|', $newUsers);
+          $info->approvalUsername = implode('|', $newNames);
+          $info->save();
+        }
+
+        $successCount++;
+      }
+    }
+
+    return array('data' => ['successCount' => $successCount]);
   }
 
 

@@ -1,9 +1,11 @@
 import { Avatar, Badge, Button, Modal, Steps, Tooltip } from "antd"
+import { message } from "antd"
 
-import Filescard from "../../contract/filescard";
-import { useState } from "react";
+import MyUploadFile from "@/components/MyUploadFile";
+import { setToUrl, getFromUrl } from "../../utils";
+import { useState, useRef } from "react";
 import EditModal from "./EditModal";
-import { alterspeech, delflownode } from "../../Flowtemplate/service";
+import { alterspeech, delflownode, alterflownodefileurls } from "../../Flowtemplate/service";
 
 
 const row:React.CSSProperties = {
@@ -20,6 +22,10 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
   const Step = Steps.Step;
   const [modalVisible, setModalVisible] = useState(false);
   const [curitem,setCuitem]=useState<any>({})
+  const [fileurlsModalVisible, setFileurlsModalVisible] = useState(false);
+  const [currentNodeFileurls, setCurrentNodeFileurls] = useState<any[]>([]);
+  const [currentNodeStep, setCurrentNodeStep] = useState<number>(0);
+  const uploadRef = useRef<any>();
   const handleSave=(e:any)=>{
    
     alterspeech({
@@ -57,6 +63,23 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
       }
     })
   }
+  const handleUpdateFileurls = () => {
+    const uploads = uploadRef?.current?.getFileList() || [];
+    const fileurls = uploads.map((u: any) => setToUrl(u)).join(',');
+    alterflownodefileurls({
+      thirdNo: thirdNo,
+      step: currentNodeStep,
+      fileurls: fileurls,
+    }).then((res: any) => {
+      if (res.errorMessage) {
+        Modal.error({ title: res.errorMessage });
+      } else {
+        message.success('更新成功');
+        setFileurlsModalVisible(false);
+        onUpdate && onUpdate();
+      }
+    });
+  };
   return (
     <div >
         <Steps
@@ -134,8 +157,22 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
                         }
                         {
                           item.fileurls && item.fileurls.length>0 && (
-                            <div >
-                              <Filescard  mode='list' urls={item.fileurls}/>
+                            <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+                              {item.fileurls.split(',').filter(Boolean).map((url: string, idx: number) => {
+                                const fileInfo = getFromUrl(url);
+                                return (
+                                  <span key={idx} style={{display:'inline-flex', alignItems:'center', gap:4}}>
+                                    <a href={fileInfo.url} target="_blank">{fileInfo.name}</a>
+                                    <span style={{color:'gray',fontSize:12}}>{fileInfo.time}</span>
+                                  </span>
+                                );
+                              })}
+                              <Button size="small" type="link" onClick={() => {
+                                const files = item.fileurls ? item.fileurls.split(',').filter(Boolean).map((url: string) => getFromUrl(url)) : [];
+                                setCurrentNodeFileurls(files);
+                                setCurrentNodeStep(index);
+                                setFileurlsModalVisible(true);
+                              }}>更新附件</Button>
                             </div>
                           )
                         }
@@ -159,6 +196,28 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
           onOk={handleSave}
           onCancel={() => setModalVisible(false)}
         />
+        <Modal
+          title="更新附件"
+          visible={fileurlsModalVisible}
+          onOk={handleUpdateFileurls}
+          onCancel={() => setFileurlsModalVisible(false)}
+          okText="保存"
+          cancelText="取消"
+        >
+          <MyUploadFile
+            name="fileurls"
+            label="附件："
+            max={20}
+            multiple={true}
+            accept="*/*"
+            maxSize={100}
+            listType="picture-card"
+            defaultImage={currentNodeFileurls}
+            uploadPath="contract"
+            uploadType={2}
+            ref={uploadRef}
+          />
+        </Modal>
 
     </div>
   )

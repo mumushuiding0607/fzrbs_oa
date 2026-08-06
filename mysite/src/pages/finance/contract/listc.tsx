@@ -51,24 +51,12 @@ const tag:CSSProperties = {
 const Listc:React.FC = () =>{
 
   const [contract, setContract] = useState<any>({})
-  const [viewmodal,setViewmodal] = useState(false)
   const [stat, setStat] = useState({})
   var [refreshKey, setRefreshKey]= useState(0)
-  const [modal1, setModal1] = useState(false)
-  const [modal2, setModal2] = useState(false)
-  const [modal3, setModal3] = useState(false)
-  const [powermodal, setPowermodal] = useState(false)
-  
-  const [rolemodal,setRolemodal] = useState(false)
-  
-  const [nullmodal,setNullmodal] = useState(false)
   const [balancetype, setBalancetype] = useState(BalanceTypes.INCOME)
   const [state,setState]=useState(-1)
   const [selectedRows, setSelectedRows]=useState<any>([])
-  const [urls, setUrls] = useState('')
-  const [contractid,setContractid] = useState<any>(0)
   const [params, setParams] = useState<any>({})
-  const [hmodal,setHmodal] = useState(false)
   const { initialState } = useModel<any>('@@initialState');
   const { currentUser } = initialState;
   const [deadline,setDeadline] = useState(false)
@@ -76,12 +64,16 @@ const Listc:React.FC = () =>{
   const [nopayconditions,setNopayconditions] = useState(false)
   var [headers,setHeaders] = useState([])
   const [powers,setPowers] = useState<any>([])
-  const [addinvoiceModal,setAddinvoiceModal] = useState(false)
   const ref = useRef<ActionType>();
   const formRef = useRef<ProFormInstance>();
-  const [debtModal,setDebtModal]=useState(false)
   const [viewfileMethod,setViewfileMethod]=useState('')
   const [activeKey, setActiveKey] = useState('tab1');
+
+  // 统一弹窗状态管理
+  const [modal, setModal] = useState<{
+    type: 'view' | 'add' | 'files' | 'pay' | 'power' | 'role' | 'nullify' | 'addinvoices' | 'debt' | 'export' | null;
+    data?: any;
+  }>({ type: null });
 
   const handleTabChange = (key:any) => {
     setActiveKey(key);
@@ -91,18 +83,15 @@ const Listc:React.FC = () =>{
     switch (action) {
       case '更新':
         setRefreshKey(++refreshKey)
-        setUrls(record.fileurls)
         setContract(record)
-        setModal1(true)
+        setModal({ type: 'add', data: record })
         break;
       case '附件':
         setRefreshKey(++refreshKey)
-        setUrls(record.fileurls)        
-        setModal2(true)
+        setModal({ type: 'files', data: record.fileurls })
         break;
       case '回款':
-        setContractid(record.id)
-        setModal3(true)
+        setModal({ type: 'pay', data: record.id })
         setRefreshKey(++refreshKey)
         break;
       case '存档':
@@ -128,7 +117,7 @@ const Listc:React.FC = () =>{
               okText: '确认',
               cancelText: '取消',
               onOk: async () => {
-                
+
                 lock({id:record.id,state:0,agentid:CONTRACT_AGENTID}).then((res:any)=>{
                   if (res.errorMessage){
                     Modal.error({title:res.errorMessage})
@@ -141,7 +130,7 @@ const Listc:React.FC = () =>{
           } else {
             Modal.error({title:'需要【解档】权限'})
           }
-          
+
           break;
       case '作废':
         Modal.confirm({
@@ -149,8 +138,7 @@ const Listc:React.FC = () =>{
           okText: '确认',
           cancelText: '取消',
           onOk: async () => {
-            setContractid(record.id)
-            setNullmodal(true)
+            setModal({ type: 'nullify', data: record.id })
           },
       });
       break
@@ -171,8 +159,7 @@ const Listc:React.FC = () =>{
         });
         break;
       case '上传发票':
-        setContractid(record.id)
-        setAddinvoiceModal(true)
+        setModal({ type: 'addinvoices', data: record.id })
         break
       default:
         break;
@@ -248,10 +235,10 @@ const Listc:React.FC = () =>{
               record.state!=ContractStatesEnum.NULLIFY && num>0 && <Badge count={num} size='small' offset={[5,-2]} style={{marginRight:'10px'}}><Tag color='blue' style={tag} >补</Tag></Badge>
             }
             <span onClick={()=>{
-              setViewmodal(true)
               record.attachNumber = num
               setContract(record)
               setRefreshKey(+refreshKey)
+              setModal({ type: 'view', data: record })
             }}>{text}</span>
           </p>
           {
@@ -567,7 +554,7 @@ const Listc:React.FC = () =>{
   const onAddcSuc = (e:any)=>{
     if(e&&e.createMirror) setBalancetype(BalanceTypes.ALL)
     ref.current?.reload()
-    setModal1(false)
+    setModal({ type: null })
 
   }
   const onDeadlineCheck = (e:any)=>{
@@ -638,9 +625,9 @@ const Listc:React.FC = () =>{
           ]}
           onTabChange={handleTabChange}
        header={{breadcrumb: {},}} extra={powers && powers.includes('管理')?[
-              
+
               <Button key="e1"  onClick={()=>{
-                setRolemodal(true)
+                setModal({ type: 'role' })
               }}>角色设置</Button>
             ]:[]
         
@@ -765,9 +752,9 @@ const Listc:React.FC = () =>{
               <Button
                 type="default"
                 key="primary"
-                
+
                 onClick={() => {
-                  setDebtModal(true)
+                  setModal({ type: 'debt' })
                 }}
               >
                 <SearchOutlined /> 逾期欠款查询
@@ -775,12 +762,12 @@ const Listc:React.FC = () =>{
               <Button
                 type="primary"
                 key="primary"
-                
+
                 onClick={() => {
                   setContract({type:BalanceTypes.INCOME})
 
                   setRefreshKey(++refreshKey)
-                  setModal1(true)
+                  setModal({ type: 'add' })
                 }}
               >
                 <PlusOutlined /> 新建
@@ -794,16 +781,15 @@ const Listc:React.FC = () =>{
                     e = viewfileMethod+e
                     return e
                   })
-                  
+
                   temp.push(...element)
                 });
-                setUrls(temp)
                 console.log('urls:',temp)
                 setRefreshKey(++refreshKey)
-                setModal2(true)
+                setModal({ type: 'files', data: temp })
               }}>批量下载附件</Button>,
               <Button onClick={()=>{
-                setHmodal(true)
+                setModal({ type: 'export' })
 
               }}>合同信息导出</Button>
             ]}
@@ -840,6 +826,7 @@ const Listc:React.FC = () =>{
 
         }
         
+        {/* 新建/编辑合同 */}
         <Modal
           title={
             (<Logs key={refreshKey} id={contract.id} onChange={onLogsChange}/>)
@@ -847,94 +834,87 @@ const Listc:React.FC = () =>{
           maskClosable={false}
           width={850}
           style={{ top: 20}}
-          visible={modal1}
-          onOk={() => setModal1(false)}
-          onCancel={() => setModal1(false)}
+          visible={modal.type === 'add'}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
         >
-          
           <AddC key={refreshKey} data={contract} onChange={onAddcSuc}/>
         </Modal>
+        {/* 附件 */}
         <Modal
           title={null}
           style={{ top: 20 }}
           width={650}
-          visible={modal2}
-          onOk={() => {
-
-          }}
-          onCancel={() => setModal2(false)}
+          visible={modal.type === 'files'}
+          onOk={() => {}}
+          onCancel={() => setModal({ type: null })}
           footer={null}
         >
-          
-          <Filescard key={refreshKey} urls={urls}/>
+          <Filescard key={refreshKey} urls={modal.data || []}/>
         </Modal>
+        {/* 上传发票 */}
         <Modal
           title={null}
           style={{ top: 20 }}
           width={650}
-          visible={addinvoiceModal}
-          onOk={() => {
-
-          }}
-          onCancel={() => setAddinvoiceModal(false)}
+          visible={modal.type === 'addinvoices'}
+          onOk={() => {}}
+          onCancel={() => setModal({ type: null })}
           footer={null}
         >
-          
-          <Addinvoice key={contractid} id={contractid}/>
+          <Addinvoice key={modal.data} id={modal.data}/>
         </Modal>
+        {/* 回款记录 */}
         <Modal
           title="记录"
           style={{ top: 20 }}
-          visible={modal3}
-          onOk={() => setModal3(false)}
-          onCancel={() => setModal3(false)}
+          visible={modal.type === 'pay'}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
         >
-          
-          <PayCollection key={'paycollection'+refreshKey} financechek={true} contractid={contractid} onChange={onPaycollectionChange}/>
+          <PayCollection key={'paycollection'+refreshKey} financechek={true} contractid={modal.data} onChange={onPaycollectionChange}/>
         </Modal>
+        {/* 权限设置 */}
         <Modal
-     
           maskClosable={false}
           width={850}
           style={{ top: 0}}
-          visible={powermodal}
-          onOk={() => setPowermodal(false)}
-          onCancel={() => setPowermodal(false)}
+          visible={modal.type === 'power'}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
         >
-          
           <Powerlist/>
         </Modal>
+        {/* 查看合同详情 */}
         <Modal
           width={850}
           style={{ top: 0}}
-          visible={viewmodal}
-          onOk={() => setViewmodal(false)}
-          onCancel={() => setViewmodal(false)}
+          visible={modal.type === 'view'}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
         >
-          
           <View id={contract.id} key={refreshKey} paystate={contract.paystate} attachNumber = {contract.attachNumber}/>
         </Modal>
+        {/* 逾期欠款查询 */}
         <Modal
           width={'100vw'}
           style={{ top: 0}}
-          visible={debtModal}
-          onOk={() => setDebtModal(false)}
-          onCancel={() => setDebtModal(false)}
+          visible={modal.type === 'debt'}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
-
         >
           <Debtsearch/>
-          
         </Modal>
-
+        {/* 合同信息导出 */}
         <Modal
           width={600}
           style={{ top: 0}}
-          visible={hmodal}
+          visible={modal.type === 'export'}
           onOk={() => {
             params.pageSize = 100000
             params.current = 1
@@ -942,7 +922,7 @@ const Listc:React.FC = () =>{
             if (headers.length==0){
               headers = columns.filter((e:any)=>!e.hideInTable&&!['index','action'].includes(e.key))
             }
-       
+
             getlist(params).then((res:any)=>{
 
               if (res.data.length<0){
@@ -950,14 +930,14 @@ const Listc:React.FC = () =>{
               }else{
                 var temp = res.data.map((row:any)=>{
                   var arr:any = []
-                
+
                   headers.forEach((h:any)=>{
-                    
+
                     var temp:string = (row[h.key]||'').toString()
                     if (temp) {
                       temp = temp.replaceAll(',','，').trim()
                     }
-                    
+
                     switch (h.key) {
                       case 'date':
                         arr.push((row.starttime?row.starttime.substring(0,10):'')+'至'+(row.endtime?row.endtime.substring(0,10):'执行结束'))
@@ -965,7 +945,7 @@ const Listc:React.FC = () =>{
                       case 'creator':
                         arr.push(row.name)
                         break
-                      
+
                       case 'signdate':
                         arr.push(row.signdate?moment(row.signdate).format('YYYY-MM-DD'):'')
                         break
@@ -976,8 +956,8 @@ const Listc:React.FC = () =>{
                         arr.push(temp)
                         break;
                     }
-                    
-                    
+
+
                   })
 
                   return arr
@@ -989,28 +969,24 @@ const Listc:React.FC = () =>{
               }
             })
           }}
-          onCancel={() => setHmodal(false)}
-
+          onCancel={() => setModal({ type: null })}
         >
-          
           <HeaderTransfer  onChange={onHeaderChange} />
         </Modal>
+        {/* 角色设置 */}
         <Modal
-         
-         
-          visible={rolemodal}
+          visible={modal.type === 'role'}
           width='100vw'
           style={{top:0,right:0}}
-          onOk={() => setRolemodal(false)}
-          onCancel={() => setRolemodal(false)}
+          onOk={() => setModal({ type: null })}
+          onCancel={() => setModal({ type: null })}
           footer= {null}
         >
           <Rolelist type='合同管理' agentid={CONTRACT_AGENTID}></Rolelist>
-          
         </Modal>
-
-        <Nullify visible={nullmodal} id={contractid} onVisibleChange={(v:any)=>{
-          setNullmodal(v)
+        {/* 作废 */}
+        <Nullify visible={modal.type === 'nullify'} id={modal.data} onVisibleChange={(v:any)=>{
+          setModal({ type: null })
           ref.current?.reload(true)
         }}></Nullify>
       </PageContainer>

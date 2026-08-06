@@ -69,3 +69,22 @@ export async function cancelUseseal(
     ...(options || {}),
   });
 }
+
+// 获取用印审批流程数据
+export async function getUsesealFlowData(
+  params: {
+    thirdNo: string;
+  },
+  options?: { [key: string]: any },
+) {
+  return request<{
+    errorMessage?: string;
+    viewdata?: any;
+    info?: any;
+    statusCn?: any[];
+  }>('/api/qyuseseal/getflowdata', {
+    method: 'GET',
+    params,
+    ...(options || {}),
+  });
+}

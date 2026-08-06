@@ -697,6 +697,141 @@ class BudgetController extends ApiBase{
     
     return array('data'=>$ret);
   }
+
+  /**
+   * 重新激活已完成的审批流程，在末尾添加经审小组审批节点
+   */
+  public function actionReactivateflow(){
+    $projectId = $this->_request['projectid'];
+    if (!$projectId) {
+      return array('errorMessage' => 'projectid不能为空');
+    }
+
+    // 获取项目信息用于后续查询
+    $project = FzrbsBudgetProject::findOne($projectId);
+    if (!$project) {
+      return array('errorMessage' => '找不到项目');
+    }
+
+    // 从WeixinOaApprovalInfo的data字段中查找该项目的审批记录
+    $approvalInfos = WeixinOaApprovalInfo::find()
+      ->where(['agentId' => $this->agentId])
+      ->andWhere(['status' => 2])
+      ->orderBy('inserttime desc')
+      ->all();
+
+    $approvalInfo = null;
+    foreach ($approvalInfos as $info) {
+      $data = json_decode($info['data'], true);
+      if (isset($data['projectid']) && intval($data['projectid']) == intval($projectId)) {
+        $approvalInfo = $info;
+        break;
+      }
+    }
+
+    if (!$approvalInfo) {
+      return array('errorMessage' => '找不到该项目的已完成审批记录');
+    }
+
+    $thirdNo = $approvalInfo['thirdNo'];
+    if (!$thirdNo) {
+      return array('errorMessage' => '找不到有效的审批编号');
+    }
+
+    // 使用WorkflowParse获取3个审批节点的审批人
+    $wfp = new WorkflowParse($this->agentId);
+    $condition = array(
+      'departmentid' => $project->pdepartmentid ?: $project->departmentid,
+      'roleToUserAll' => true,
+    );
+   
+    $nodeRoles = [5];
+    $nodeRoleNames = ['会计'];
+    $nodeUsers = [];
+    $approvalUserids = [];
+    $approvalUsernames = [];
+
+    foreach ($nodeRoles as $idx => $roleId) {
+      $tmpdata = array('role' => $roleId);
+      $users = $wfp->roleToUserAll($this->userinfo['userid'], $tmpdata, $condition, 0);
+      if (!$users) {
+        return array('errorMessage' => '找不到【' . $nodeRoleNames[$idx] . '】审批人');
+      }
+      $nodeUsers[$roleId] = $users;
+      // 当前审批人设置为第一个节点（经审小组-法务）的审批人
+      if ($idx == 0) {
+        foreach ($users as $u) {
+          $approvalUserids[] = $u['ItemUserId'];
+          $approvalUsernames[] = $u['ItemName'];
+        }
+      }
+    }
+
+    // 获取审批流程数据
+    $flowData = WeixinOaApprovaldata::find()
+      ->where(['thirdNo' => $thirdNo, 'agentid' => $this->agentId])
+      ->one();
+
+    if (!$flowData) {
+      return array('errorMessage' => '找不到审批流程数据');
+    }
+
+    $flowDataArr = json_decode($flowData['data'], true);
+
+    // 按顺序添加3个审批节点
+    foreach ($nodeRoles as $roleId) {
+      $newNode = [
+        'NodeType' => 0,
+        'NodeStatus' => 1,
+        'NodeRoleid' => $roleId,
+        'Items' => ['Item' => $nodeUsers[$roleId]],
+      ];
+      $flowDataArr['data']['ApprovalNodes']['ApprovalNode'][] = $newNode;
+    }
+
+    // 更新step为新节点索引（第一个添加的节点）
+    $newStep = count($flowDataArr['data']['ApprovalNodes']['ApprovalNode']) - 3;
+    $flowDataArr['step'] = $newStep;
+    $flowDataArr['data']['approverstep'] = $newStep;
+    $flowDataArr['data']['OpenSpstatus'] = 1;
+
+    // 事务处理
+    $transaction = Yii::$app->db->beginTransaction();
+    try {
+      // 更新FzrbsBudgetProject
+      $project->thirdno = $thirdNo;
+      $project->state = $project->state - 1;
+      $project->save();
+
+      // 更新WeixinOaApprovalInfo，当前审批人为经审小组-法务
+      $approvalInfo->status = 1;
+      $approvalInfo->approvalUserid = implode('|', $approvalUserids);
+      $approvalInfo->approvalUsername = implode('|', $approvalUsernames);
+      $approvalInfo->save();
+      
+
+      // 更新WeixinOaApprovaldata
+      $flowData->status = 1;
+      $flowData->step = $newStep;
+      $flowData->data = json_encode($flowDataArr);
+      $flowData->save();
+
+      $transaction->commit();
+
+      // 记录勘误申请日志
+      $this->_operationlog([
+        'catalog' => '勘误申请',
+        'remark' => "[项目ID:{$projectId}] 项目【{$project->title}】执行勘误申请，重新激活流程添加经审小组审批节点"
+      ]);
+
+      return array('success' => true, 'thirdNo' => $thirdNo);
+
+    } catch (\Throwable $th) {
+      $transaction->rollBack();
+      return array('errorMessage' => $th->getMessage());
+    }
+  }
+
   public function actionUrge(){
     
     if (!$this->_request['thirdNo']) return array('errorMessage'=>'thirdNo为空');
@@ -1361,7 +1496,7 @@ class BudgetController extends ApiBase{
           }
           
         }
-        
+        if (!$obj['state']) unset($obj['state']);
         FzrbsBudgetProject::updateAll($obj,['id'=>$obj['id']]);
 
         // 修改执行绩效比例performanceratio和finalperformanceratio，需要更新预算和决算的绩效比例
@@ -2401,7 +2536,7 @@ class BudgetController extends ApiBase{
       ? (intval($p->state) >= $this->FINAL_PROJECT)
       : (intval($p->state) > $this->FINAL_PROJECT);
 
-    if ($isRestricted) {
+    if ($isRestricted&&$oldContent) {
       $maxLength = 15;
       // 计算差异字数（排除HTML标签、空格和换行符）
       $stripContent = strip_tags(preg_replace('/[\s\n\r]/', '', $content));
@@ -2410,17 +2545,21 @@ class BudgetController extends ApiBase{
       if ($diffLength > $maxLength) {
         return array('errorMessage' => "每次仅能修改{$maxLength}个字");
       }
-      // 记录受限修改的日志
-      $this->_operationlog([
-        'catalog' => '预算决算变更',
-        'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
-      ]);
+      // 记录受限修改的日志（仅当有变化时）
+      if ($diffContent !== '无变化') {
+        $this->_operationlog([
+          'catalog' => '预算决算变更',
+          'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+        ]);
+      }
     } else {
-      // 决算之前，记录日志
-      $this->_operationlog([
-        'catalog' => '预算决算变更',
-        'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
-      ]);
+      // 决算之前，记录日志（仅当有变化时）
+      if ($diffContent !== '无变化') {
+        $this->_operationlog([
+          'catalog' => '预算决算变更',
+          'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+        ]);
+      }
     }
 
     // 更新报告内容
@@ -3394,9 +3533,10 @@ class BudgetController extends ApiBase{
       ->asArray()
       ->all();
 
-    // 去掉remark里的项目ID前缀和项目名，方便展示
+    // 去掉remark里的项目ID前缀和项目名，保留"修改了【xxx】"，去掉"变更内容："前缀
     foreach ($res as &$row) {
       $row['remark'] = preg_replace('/^\[项目ID:\d+\]\s*项目【[^】]*】\s*/', '', $row['remark']);
+      $row['remark'] = preg_replace('/变更内容：[\s\n\r]*/', '', $row['remark']);
       $row['inserttime'] = $row['inserttime'] ? date('Y-m-d H:i:s', $row['inserttime']) : '';
     }
 
@@ -3812,9 +3952,15 @@ class BudgetController extends ApiBase{
             
             if($node['NodeRoleid']==$this->EDITORIAL_BOARD){// 编委会
               $data['editorialboard']=$this->getApproverAndDate($items);
+              $data['editorialSpeech']= $node['speech'];
+              $data['editorialDate']= $node['date'];
+              $data['editorialUsername']= $node['username']?$node['username']:$info['userName'];
             }
             if ($node['NodeRoleid']==$this->ECONOMIC_BOARD){ //经审会
               $data['economicalboard']=$this->getApproverAndDate($items);
+              $data['economicalSpeech']= $node['speech'];
+              $data['economicalDate']= $node['date'];
+              $data['economicalUsername']= $node['username']?$node['username']:$info['userName'];
 
             }
 

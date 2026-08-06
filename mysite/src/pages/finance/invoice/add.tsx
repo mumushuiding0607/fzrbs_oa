@@ -70,6 +70,7 @@ const Add:React.FC<{data?:any,onChange:Function}> = ({data,onChange}) =>{
   }):[])
   const uploadRef = useRef<AnimationPlayState>();
   var [refreshkey,setRefreshkey] = useState(1)
+  var [submitting,setSubmitting] = useState(false)
   const dateFormat = 'YYYY-MM-DD HH:mm:ss'
   var [uprefresh,setUprefresh]=useState(0)
 
@@ -180,16 +181,18 @@ const Add:React.FC<{data?:any,onChange:Function}> = ({data,onChange}) =>{
       okText: '是',
       cancelText: '否',
       onOk: () => {
+        setSubmitting(true)
         saveinvoicing(values).then((res:any)=>{
+          setSubmitting(false)
       if (res.errorMessage) {
         Modal.error({
           title: res.errorMessage,
         });
       } else {
-        
+
         onChange(res.data)
       }
-      
+
     })
       }
     })
@@ -350,7 +353,7 @@ const Add:React.FC<{data?:any,onChange:Function}> = ({data,onChange}) =>{
         <Form.Item {...tailLayout}>
         
         <Space>
-          <Button type="primary" htmlType="submit">
+          <Button type="primary" htmlType="submit" disabled={submitting}>
             {!obj.id?'提交':'更新'}
           </Button>
           <Button htmlType="button" onClick={onReset}>

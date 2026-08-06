@@ -922,7 +922,7 @@ class InvoicingsyncController extends Controller
       $where[]=['=','sign',$sign];
     }
     
-    $datas = FzrbsCompany::find()->where($where)->orderBy('id desc')->limit(10)->asArray()->all();
+    $datas = FzrbsCompany::find()->where($where)->orderBy('id desc')->limit(100)->asArray()->all();
     echo json_encode($datas,JSON_UNESCAPED_UNICODE);
     exit;
   }

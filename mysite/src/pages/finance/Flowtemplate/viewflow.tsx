@@ -13,14 +13,14 @@ const { Search } = Input;
 
 
 
-const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}> = ({thirdNo='',visible=false,onVisibleChange}) =>{
+const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function,agentid?:any}> = ({thirdNo='',visible=false,onVisibleChange,agentid:agentidProp}) =>{
 
   const [showModal,setShowModal] = useState(visible)
   const [data,setData]=useState<any>({})
   const [vkey,setVkey]=useState(0)
   const [stepSelect,setStepSelect]=useState<any>(0)
   const [itemSelect,setItemSelect]=useState<any>(0)
-  const [agentid,setAgentid]=useState<any>()
+  const [agentid,setAgentid]=useState<any>(agentidProp)
   const [searchValue,setSearchValue]=useState(thirdNo||'')
   const [alterMode, setAlterMode] = useState<'transfer' | 'addsigner'>('transfer');
   const [showAlterModal, setShowAlterModal] = useState(false);
@@ -29,7 +29,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
     setShowModal(visible)
     setSearchValue(thirdNo||'')
     if (thirdNo&&thirdNo.length>0){
-      getflowdata({thirdNo}).then(res=>{
+      getflowdata({thirdNo,agentid:agentidProp || agentid}).then(res=>{
       if (res.errorMessage){
           Modal.error({
             title: '报错',
@@ -43,7 +43,7 @@ const ViewFlow:React.FC<{thirdNo?:any,visible:boolean,onVisibleChange:Function}>
         }
       })
     }
-  },[visible,thirdNo])
+  },[visible,thirdNo,agentidProp])
 
 
   const onSearch = (e:any)=>{
