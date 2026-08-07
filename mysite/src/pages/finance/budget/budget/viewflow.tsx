@@ -65,6 +65,8 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
   const [step,setStep] = useState(0)
   const [incomecontracts,setIncomecontracts]=useState('')
   const [expendcontracts,setExpendcontracts]=useState('')
+  const [incomepaycollection,setIncomepaycollection]=useState(0)
+  const [expendpaycollection,setExpendpaycollection]=useState(0)
   const Step = Steps.Step;
   const [printModal,setPrintModal]=useState(false)
   const [offlineModal,setOfflineModal] = useState(false)
@@ -90,6 +92,8 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
         setStatusCn(res.statusCn)
         setIncomecontracts(res.incomecontracts)
         setExpendcontracts(res.expendcontracts)
+        setIncomepaycollection(res.incomepaycollection || 0)
+        setExpendpaycollection(res.expendpaycollection || 0)
         
         if (res.viewdata) {
           // 判断当前审批人是否已经审过
@@ -208,7 +212,38 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
         
       }
     })
-    
+
+  }
+  const handleFlowUpdate = () => {
+    getflowinfo({thirdNo:thirdno,projectid,state}).then((res:any)=>{
+      if (res.errorMessage) {
+        Modal.error({
+          title: '报错',
+          content: res.errorMessage,
+        });
+      } else {
+        setBasic(res.basic)
+        setViewdata(res.viewdata)
+        setStatusCn(res.statusCn)
+        setIncomecontracts(res.incomecontracts)
+        setExpendcontracts(res.expendcontracts)
+        setIncomepaycollection(res.incomepaycollection || 0)
+        setExpendpaycollection(res.expendpaycollection || 0)
+        if (res.viewdata) {
+          setStep(res.viewdata.step+1)
+          var node = res.viewdata.approval[res.viewdata.step+1]
+          var temp = false
+          if (node && node.NodeStatus==2){
+            temp=true
+          }else if (node) {
+            var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
+            if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
+          }
+          setApprove(temp)
+        }
+        if (onchange) onchange(res)
+      }
+    })
   }
   var income = 0
   var expend = 0
@@ -405,7 +440,7 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
             {/* </Card> */}
 
 
-            <Flow data={viewdata} condition={basic} statusCn={statusCn} step={step} offlineAgree={onOfflineAgree}></Flow>
+            <Flow data={viewdata} thirdNo={thirdno} condition={basic} statusCn={statusCn} step={step} offlineAgree={onOfflineAgree} onUpdate={handleFlowUpdate}></Flow>
             
             
 
@@ -413,13 +448,19 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
               incomecontracts&&incomecontracts!="" &&
 
               <Descriptions.Item label="收款合同">
-                <Filescard  urls={incomecontracts} mode='list'/>
+                <div style={{display:'flex',flexDirection:'column'}}>
+                  <Filescard urls={incomecontracts} mode='list'/>
+                  {incomepaycollection > 0 && <div style={{marginTop:8}}>到款金额：{incomepaycollection}元</div>}
+                </div>
             </Descriptions.Item>
             }
             {
-              expendcontracts&&expendcontracts!="" && 
+              expendcontracts&&expendcontracts!="" &&
               <Descriptions.Item label="付款合同">
-                <Filescard  urls={expendcontracts} mode='list'/>
+                <div style={{display:'flex',flexDirection:'column'}}>
+                  <Filescard urls={expendcontracts} mode='list'/>
+                  {expendpaycollection > 0 && <div style={{marginTop:8}}>到款金额：{expendpaycollection}元</div>}
+                </div>
             </Descriptions.Item>
             }
             {

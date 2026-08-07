@@ -44,6 +44,9 @@ import UserAutocomplete from '../budget/common/userAutocomplete';
 import BusinesstypeTree from './Businesstype_Tree';
 import { delinvoicingnotice } from './flow/service';
 import TableScrollSync from '../common/TableScrollSync';
+import EditCreatorButton from './EditCreatorButton';
+import OperationLog from '../common/OperationLog';
+import { getoperationlogs } from './service';
 
 
 // style
@@ -97,6 +100,10 @@ const Listc:React.FC = () =>{
   const [showEmailSetting, setShowEmailSetting] = useState(false);
   const [invoicerModal,setInvoicerModal]=useState(false)
   const [query,setQuery]=useState<any>({})
+  const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [currentLogId, setCurrentLogId] = useState<number>();
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
+  const [selectedIds, setSelectedIds] = useState('');
   const onMenuClick = (action:String,record:any) => {
 
     switch (action) {
@@ -141,6 +148,11 @@ const Listc:React.FC = () =>{
         });
         break;
 
+      case '变更记录':
+        setObj(record);
+        setView(true);
+        setDefaultActiveKey('3');
+        break;
       default:
         break;
     }
@@ -467,6 +479,8 @@ const Listc:React.FC = () =>{
                   <Button danger type="text" onClick={()=>{onMenuClick('删除',record)}}>删除</Button>
                 }
                 <Button type="text" onClick={()=>{onMenuClick('打印',record)}}>打印</Button>
+                <EditCreatorButton obj={record} onSave={() => ref.current?.reload()} />
+                <Button type="text" onClick={()=>{onMenuClick('变更记录',record)}}>变更记录</Button>
 
                 </>)
               }
@@ -553,8 +567,10 @@ const Listc:React.FC = () =>{
               setSelectedRows(selectedRows);
               if (selectedRows.length>0){
                 setIds(selectedRows.map((e:any)=>e.id).join(','))
+                setSelectedIds(selectedRows.map((e:any)=>e.id).join(','))
               }else{
                 setIds('')
+                setSelectedIds('')
               }
             },
           }}
@@ -703,14 +719,21 @@ const Listc:React.FC = () =>{
               }}>导出查询结果</Button>,
               
               <Button danger type='primary' onClick={()=>{
-              
+
                 if (!ids){
                   Modal.error({title:'请选择要打印的项'})
                   return
                 }
                 setPrintModal(true)
 
-              }}>打印</Button>
+              }}>打印</Button>,
+              <Button onClick={()=>{
+                if (!selectedIds){
+                  Modal.error({title:'请选择要转人的项'})
+                  return
+                }
+                setBatchModalVisible(true)
+              }}>批量转人</Button>
           ]}
           
         />
@@ -830,6 +853,10 @@ const Listc:React.FC = () =>{
               
               <Addinvoice key={refreshKey} invoicingid={0} url={'/api/invoicing/saveinvoice'} />
             </Modal>
+            <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+              <OperationLog api={getoperationlogs} bizId={currentLogId} />
+            </Modal>
+            <EditCreatorButton ids={selectedIds} visible={batchModalVisible} onCancel={() => setBatchModalVisible(false)} onSave={() => { ref.current?.reload(); setSelectedIds(''); }} />
       </PageContainer>
     </ConfigProvider>
   )

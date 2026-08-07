@@ -123,4 +123,24 @@ export async function savedeptcode(data: {}, options?: { [key: string]: any }) {
     ...(options || {}),
   });
 }
+export async function getoperationlogs(
+  params: {
+    bizId: any;
+    current?: number;
+    pageSize?: number;
+  },
+  options?: { [key: string]: any },
+) {
+  return request<{
+    data: [];
+    total?: number;
+    success?: boolean;
+  }>('/api/budget/getoperationlogs', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
 

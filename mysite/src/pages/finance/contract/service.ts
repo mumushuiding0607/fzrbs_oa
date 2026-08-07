@@ -61,6 +61,13 @@ export async function altercharger(data: {}, options?: { [key: string]: any }) {
     ...(options || {}),
   });
 }
+export async function altercreator(data: {}, options?: { [key: string]: any }) {
+  return request('/api/contract/altercreator', {
+    data,
+    method: 'POST',
+    ...(options || {}),
+  });
+}
 
 
 
@@ -388,6 +395,25 @@ export async function downloadpurchase(
     params:{...params}
   })
 }
-
+export async function getoperationlogs(
+  params: {
+    bizId: any;
+    current?: number;
+    pageSize?: number;
+  },
+  options?: { [key: string]: any },
+) {
+  return request<{
+    data: [];
+    total?: number;
+    success?: boolean;
+  }>('/api/contract/getoperationlogs', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
 
 

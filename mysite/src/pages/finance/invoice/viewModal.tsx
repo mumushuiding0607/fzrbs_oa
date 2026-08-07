@@ -3,7 +3,7 @@ import { Button, Descriptions, Form,  Modal, Popover, Row, Table, Tabs } from "a
 
 import { useEffect, useState } from "react";
 
-import { addcontract, delcontract, getinvoicing, saveinvoicing } from "./service";
+import { addcontract, delcontract, getinvoicing, saveinvoicing, getoperationlogs } from "./service";
 
 import Viewflow from "./flow/Viewflow";
 
@@ -21,6 +21,7 @@ import InvoicingItemsList from "./invoicing_items_list";
 import { copyTextToClipboard } from "../utils";
 import AddPdfInvoice from "./addPdfInvoice";
 import ContractsTable from "../contract/contractsTable";
+import OperationLog from "../common/OperationLog";
 
 
 
@@ -570,6 +571,9 @@ const ViewModal:React.FC<{id:any,thirdNo?:any,onVisibleChange?:Function,visible:
                 }
                 
               </div>
+            </Tabs.TabPane>
+            <Tabs.TabPane tab="变更记录" key="3">
+              <OperationLog api={getoperationlogs} bizId={id} />
             </Tabs.TabPane>
           </Tabs>
           

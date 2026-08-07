@@ -30,6 +30,8 @@ import { getthirdno, startflow, viewflow } from '../budget/service';
 import Flow from '../budget/flow';
 import TableScrollSync from '../../common/TableScrollSync';
 import EditCreatorButton from './EditCreatorButton';
+import OperationLog from '../../common/OperationLog';
+import { getoperationlogs } from '../service';
 
 
 // *************************页面元素*********************************
@@ -61,6 +63,11 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
   const [searchStat,setSearchStat]=useState<any>([])
 
   const [refreshStat,setRefreshStat]=useState(1)
+
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
+  const [selectedIds, setSelectedIds] = useState('');
+  const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [currentLogId, setCurrentLogId] = useState<number>();
 
   // 统一弹窗状态管理
   const [modal, setModal] = useState<{
@@ -600,10 +607,11 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
                         }
                       })
                   }}>{record.lock?'解档':'锁档'}</Button>
-                  <EditCreatorButton onSave={()=>{ 
+                  <EditCreatorButton onSave={()=>{
                       actionRef.current?.reload()
                     }}
                      obj={{ id:record.id,departmentid:record.departmentid,creator:record.creator }}/>
+                  <Button type="text" onClick={()=>{onMenuClick('变更记录',record)}}>变更记录</Button>
                   </>
 
                   )
@@ -683,6 +691,10 @@ const List:React.FC<{showHeader?:boolean}> = ({showHeader=true}) => {
           setRefreshKey(++refreshKey)
           setModal({ type: 'contracts', data: record.contractids })
           break
+      case '变更记录':
+        setCurrentLogId(record.id);
+        setLogsModalVisible(true);
+        break
       default:
         break;
     }
@@ -942,8 +954,14 @@ useEffect(()=>{
               }else{
                 setStat(searchStat)
               }
-              
-              
+
+              if (selectedRows.length>0){
+                setSelectedIds(selectedRows.map((e:any)=>e.id).join(','))
+              }else{
+                setSelectedIds('')
+              }
+
+
             },
           }}
           tableAlertRender={false}
@@ -997,8 +1015,15 @@ useEffect(()=>{
             >
               <PlusOutlined /> 新建
             </Button>,
+            <Button onClick={()=>{
+              if (!selectedIds){
+                Modal.error({title:'请选择要转人的项'})
+                return
+              }
+              setBatchModalVisible(true)
+            }}>批量转人</Button>
 
-            
+
           ]}
       />
       <TableScrollSync tableId="projectTable" onScroll={(scroll:any)=>{
@@ -1054,6 +1079,10 @@ useEffect(()=>{
         footer={null}
       >
         <Print record={project} key={project.id}/>
+      </Modal>
+      <EditCreatorButton ids={selectedIds} visible={batchModalVisible} onCancel={() => setBatchModalVisible(false)} onSave={() => { actionRef.current?.reload(); setSelectedIds(''); }} />
+      <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+        <OperationLog key={currentLogId} api={getoperationlogs} bizId={currentLogId} />
       </Modal>
 
     </PageContainer>

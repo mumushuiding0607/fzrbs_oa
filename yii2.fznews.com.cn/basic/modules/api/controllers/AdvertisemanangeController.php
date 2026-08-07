@@ -1210,7 +1210,7 @@ class AdvertisemanangeController extends ApiBase{
           } else {
 
               // 更新广告时检查权限并获取原有日期字段
-              $checkSql = "SELECT SYS_AUTHORS, SYS_DELETEFLAG,AI_PublishTime, AI_PublishEndTime, AI_OrderID FROM advitem WHERE SYS_DOCUMENTID = :id";
+              $checkSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
               $existingAdvitem = Yii::$app->paymentdb->createCommand($checkSql)->bindValues([':id' => $obj['SYS_DOCUMENTID']])->queryOne();
 
               // 检查是否是广告审核角色
@@ -1663,7 +1663,15 @@ class AdvertisemanangeController extends ApiBase{
                   Yii::$app->paymentdb->createCommand()->insert('advitem', $obj)->execute();
                   $advitemId = Yii::$app->paymentdb->getLastInsertID();
                   Yii::$app->paymentdb->createCommand()->update(Advorder::tableName(), ['SYS_DELETEFLAG'=>1,'thirdNo'=>''], ['SYS_DOCUMENTID' => $orderId])->execute();
-                  
+
+                  // 记录日志：新增广告导致订单状态变为提交审批
+                  if (isset($existingOrder) && $existingOrder['SYS_DELETEFLAG'] == 0) {
+                      $this->_operationlog([
+                          'catalog' => '订单状态变更',
+                          'remark' => '订单【' . $orderId . '】因新增广告，状态由【生效】变为【提交审批】'
+                      ]);
+                  }
+
               } else {
                   // 检查是否只修改了附件或合同字段
                   $advitemId = $obj['SYS_DOCUMENTID'];
@@ -2180,6 +2188,15 @@ class AdvertisemanangeController extends ApiBase{
                   ->update('advitem', ['SYS_DELETEFLAG' => $flag,'thirdNo'=>''], ['AI_OrderID' => $orderId])
                   ->execute();
 
+              // 记录日志：SYS_DELETEFLAG 变化
+              $oldFlag = $orderResult['SYS_DELETEFLAG'];
+              $flagText = $flag == 0 ? '生效' : ($flag == 1 ? '提交审批' : '未知状态');
+              $oldFlagText = $oldFlag == 0 ? '生效' : ($oldFlag == 1 ? '草稿/待审批' : '未知状态');
+              $this->_operationlog([
+                  'catalog' => '订单状态变更',
+                  'remark' => '订单【' . $orderId . '】状态由【' . $oldFlagText . '】变为【' . $flagText . '】'
+              ]);
+
               $transaction->commit();
 
               return ['success' => true, 'message' => '更新成功'];
@@ -2230,6 +2247,15 @@ class AdvertisemanangeController extends ApiBase{
           Yii::$app->paymentdb->createCommand()
               ->update('advitem', ['SYS_DELETEFLAG' => $flag, 'thirdNo' => ''], ['SYS_DOCUMENTID' => $advitemId])
               ->execute();
+
+          // 记录日志：SYS_DELETEFLAG 变化
+          $oldFlag = $advitemResult['SYS_DELETEFLAG'];
+          $flagText = $flag == 0 ? '生效' : ($flag == 1 ? '提交审批' : '未知状态');
+          $oldFlagText = $oldFlag == 0 ? '生效' : ($oldFlag == 1 ? '草稿/待审批' : '未知状态');
+          $this->_operationlog([
+              'catalog' => '广告状态变更',
+              'remark' => '广告【' . $advitemId . '】状态由【' . $oldFlagText . '】变为【' . $flagText . '】'
+          ]);
 
           // 如果是重新提交(flag=1)，同步设置订单的SYS_DELETEFLAG=1
           if ($flag == 1 && !empty($advitemResult['AI_OrderID'])) {
@@ -3050,14 +3076,20 @@ class AdvertisemanangeController extends ApiBase{
                 'tp'=>'0'
             ];
             $flowdata = $wfp->startFlow($userinfo['userid'],$templateid, $condition, ['infoid'=>$orderid]);
-            
+
             Yii::$app->paymentdb->createCommand()->update('advorder', [
                 'thirdNo' => $flowdata['thirdNo'],
             ], 'SYS_DOCUMENTID='.$orderid)->execute();
-            
+
+            // 记录日志：提交审批
+            $this->_operationlog([
+                'catalog' => '广告审批提交',
+                'remark' => '订单【' . $orderid . '】由【' . $userinfo['name'] . '】提交审批'
+            ]);
+
             $title = '【广告审批】'.$p['SYS_CURRENTUSERNAME'].'的订单审批申请';
            $p['thirdNo']=$flowdata['thirdNo'];
-           
+
             $this->send($flowdata['approvalUserid'], $title, $p);
             
             
@@ -3136,6 +3168,12 @@ class AdvertisemanangeController extends ApiBase{
             Yii::$app->paymentdb->createCommand()->update('advitem', [
                 'thirdNo' => $flowdata['thirdNo'],
             ], 'SYS_DOCUMENTID='.$advitemid)->execute();
+
+            // 记录日志：提交审批
+            $this->_operationlog([
+                'catalog' => '广告审批提交',
+                'remark' => '广告【' . $advitemid . '】由【' . $userinfo['name'] . '】提交审批'
+            ]);
 
             $title = '【广告审批】'.$p['SYS_CURRENTUSERNAME'].'的广告审批申请';
             $p['thirdNo'] = $flowdata['thirdNo'];
@@ -3287,10 +3325,20 @@ class AdvertisemanangeController extends ApiBase{
                   Yii::$app->paymentdb->createCommand()
                       ->update('advitem', ['SYS_DELETEFLAG' => 0], ['AI_OrderID' => $order['SYS_DOCUMENTID']])
                       ->execute();
+                  // 记录日志：订单审批通过
+                  $this->_operationlog([
+                      'catalog' => '广告审批通过',
+                      'remark' => '订单【' . $order['SYS_DOCUMENTID'] . '】审批通过，所有广告状态变为生效'
+                  ]);
                   $this->send($noticeUserids['noticeuserids'], '【广告审批】审批已通过', $order);
               } else if($advitem){
                    // 广告审批通过,只更新该广告
                    Yii::$app->paymentdb->createCommand()->update('advitem', ['SYS_DELETEFLAG'=>0], 'thirdNo=:thirdNo', [':thirdNo'=>$thirdNo])->execute();
+                   // 记录日志：广告审批通过
+                   $this->_operationlog([
+                       'catalog' => '广告审批通过',
+                       'remark' => '广告【' . $advitem['SYS_DOCUMENTID'] . '】审批通过，状态从【待审批】变为【生效】'
+                   ]);
                    // 检查订单下是否还有未审的广告(SYS_DELETEFLAG=1)
                    $stillHasUnapproved = Yii::$app->paymentdb->createCommand(
                        "SELECT SYS_DOCUMENTID FROM advitem WHERE AI_OrderID=:orderId AND SYS_DELETEFLAG=1 AND SYS_DOCUMENTID<>:docId LIMIT 1",
@@ -3346,6 +3394,27 @@ class AdvertisemanangeController extends ApiBase{
                 ", [':thirdNo'=>$thirdNo])->queryOne();
             }
 
+            // 获取之前已审批的人（从工作流数据中）
+            $approvedUserids = [];
+            $flowData = WeixinOaApprovaldata::find()->where(['thirdNo' => $thirdNo, 'agentid' => $this->agentId])->asArray()->one();
+            if ($flowData && isset($flowData['data'])) {
+                $flowArr = json_decode($flowData['data'], true);
+                if (isset($flowArr['data']['ApprovalNodes']['ApprovalNode'])) {
+                    foreach ($flowArr['data']['ApprovalNodes']['ApprovalNode'] as $node) {
+                        if (isset($node['Items']['Item'])) {
+                            foreach ($node['Items']['Item'] as $item) {
+                                if ($item['ItemStatus'] == 2 && $item['ItemUserId'] != $userid) {
+                                    $approvedUserids[] = $item['ItemUserId'];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 获取驳回原因
+            $rejectReason = isset($postdatas['speech']) && !empty($postdatas['speech']) ? $postdatas['speech'] : '';
+
             if($order){
                 Yii::$app->paymentdb->createCommand()->update(
                     'advorder',
@@ -3353,7 +3422,22 @@ class AdvertisemanangeController extends ApiBase{
                     'thirdNo=:thirdNo',
                     [':thirdNo' => $thirdNo]
                 )->execute();
-                $this->send($noticeUserids['noticeuserids'], '【广告审批】订单审批申请被驳回', $order);
+                // 记录日志：驳回审批
+                $remark = '订单【' . $order['SYS_DOCUMENTID'] . '】被【' . $this->userinfo['name'] . '】驳回';
+                if ($rejectReason) {
+                    $remark .= '，驳回原因：' . $rejectReason;
+                }
+                $this->_operationlog([
+                    'catalog' => '广告审批驳回',
+                    'remark' => $remark
+                ]);
+                // 合并通知人：经办人 + 已审批人 + 当前待审批人
+                $allNoticeUserids = array_unique(array_merge(
+                    [$order['SYS_AUTHORS']],
+                    $approvedUserids,
+                    $noticeUserids['noticeuserids'] ? (is_array($noticeUserids['noticeuserids']) ? $noticeUserids['noticeuserids'] : explode('|', $noticeUserids['noticeuserids'])) : []
+                ));
+                $this->send($allNoticeUserids, '【广告审批】订单审批申请被驳回', $order);
             } else if($advitem){
                 Yii::$app->paymentdb->createCommand()->update(
                     'advitem',
@@ -3361,7 +3445,22 @@ class AdvertisemanangeController extends ApiBase{
                     'thirdNo=:thirdNo',
                     [':thirdNo' => $thirdNo]
                 )->execute();
-                $this->sendadv($noticeUserids['noticeuserids'], '【广告审批】广告审批被驳回', $advitem);
+                // 记录日志：驳回审批
+                $remark = '广告【' . $advitem['SYS_DOCUMENTID'] . '】被【' . $this->userinfo['name'] . '】驳回';
+                if ($rejectReason) {
+                    $remark .= '，驳回原因：' . $rejectReason;
+                }
+                $this->_operationlog([
+                    'catalog' => '广告审批驳回',
+                    'remark' => $remark
+                ]);
+                // 合并通知人：经办人 + 已审批人 + 当前待审批人
+                $allNoticeUserids = array_unique(array_merge(
+                    [$advitem['SYS_AUTHORS']],
+                    $approvedUserids,
+                    $noticeUserids['noticeuserids'] ? (is_array($noticeUserids['noticeuserids']) ? $noticeUserids['noticeuserids'] : explode('|', $noticeUserids['noticeuserids'])) : []
+                ));
+                $this->sendadv($allNoticeUserids, '【广告审批】广告审批被驳回', $advitem);
             }
             $transaction->commit();
 
@@ -3400,6 +3499,11 @@ class AdvertisemanangeController extends ApiBase{
                   'thirdNo=:thirdNo',
                   [':thirdNo' => $thirdNo]
               )->execute();
+              // 记录日志：撤回审批
+              $this->_operationlog([
+                  'catalog' => '广告审批撤回',
+                  'remark' => '订单【' . $order['SYS_DOCUMENTID'] . '】被【' . $this->userinfo['name'] . '】撤回'
+              ]);
               $transaction->commit();
               $title = '【广告审批撤销】'.$order['SYS_CURRENTUSERNAME'].'的订单审批申请';
               $this->send($noticeUserids['noticeuserids'], $title, $order);
@@ -3410,6 +3514,11 @@ class AdvertisemanangeController extends ApiBase{
                   'thirdNo=:thirdNo',
                   [':thirdNo' => $thirdNo]
               )->execute();
+              // 记录日志：撤回审批
+              $this->_operationlog([
+                  'catalog' => '广告审批撤回',
+                  'remark' => '广告【' . $advitem['SYS_DOCUMENTID'] . '】被【' . $this->userinfo['name'] . '】撤回'
+              ]);
               $transaction->commit();
               $advitem['partbname'] = $advitem['AI_Customer'];
               $advitem['AO_Customer'] = $advitem['AI_Customer'];

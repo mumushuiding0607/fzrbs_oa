@@ -2723,35 +2723,109 @@ class BudgetController extends ApiBase{
   }
 
   public function actionAltercreator(){
-    $id=$this->_request['id'];
-    // 查询项目
-    $p = FzrbsBudgetProject::findOne($id);
-    // 只有项目创建人才能修改
-    if ($p->creator!=$this->_adminInfo['wxuserid']) return array('errorMessage'=>'没有权限');
+    $ids = $this->_request['ids'];  // 批量：逗号分隔的ID
+    $id = $this->_request['id'];    // 单条：单个ID
     $newcreator = $this->_request['creator'];
     $departmentid = $this->_request['departmentid'];
     if (!$newcreator) return array('errorMessage'=>'请选择新创建人');
     $newuser = WeixinOAUserInfo::find()->where(['userid'=>$newcreator])->one();
-    $p->creator = $newcreator;
-    $temp=['creator'=>$newcreator,'creatorname'=>$newuser->name];
-    if ($departmentid){
-      $p->departmentid = $departmentid;
-      $dept = WeixinOaDepartment::findOne($p->departmentid);
-      $p->department=$dept['name'];
-      $temp['departmentid'] = $p->departmentid;
-      $temp['department'] = $dept['name'];
-    }
-    $transaction = Yii::$app->db->beginTransaction();
-    try {
-      $p->save();
-      FzrbsBudgetBalance::updateAll($temp,['projectid'=>$p->id]);
+    $newusername = $newuser->name ?? '';
 
-    } catch (\Throwable $th) {
-      $transaction->rollBack();
-      return array('errorMessage'=>$th->getMessage());
+    if ($ids) {
+      // 批量处理
+      $idArr = explode(',', $ids);
+      if (count($idArr) > 20) {
+        return array('errorMessage' => '每次最多转20条');
+      }
+
+      // 先查询原项目信息用于日志
+      $oldProjects = FzrbsBudgetProject::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldCreatorMap = [];
+      foreach ($oldProjects as $op) {
+        $oldCreatorMap[$op['id']] = $op['creator'];
+      }
+      // 获取原创建人姓名
+      $oldUserids = array_unique(array_column($oldProjects, 'creator'));
+      $oldUsers = WeixinOAUserInfo::find()->select(['userid', 'name'])->where(['userid' => $oldUserids])->asArray()->all();
+      $oldUserMap = [];
+      foreach ($oldUsers as $ou) {
+        $oldUserMap[$ou['userid']] = $ou['name'];
+      }
+
+      // 批量更新项目创建人
+      $updateData = ['creator' => $newcreator];
+      if ($departmentid) {
+        $dept = WeixinOaDepartment::findOne($departmentid);
+        $updateData['departmentid'] = $departmentid;
+        $updateData['department'] = $dept['name'] ?? '';
+      }
+      FzrbsBudgetProject::updateAll($updateData, ['id' => $idArr]);
+
+      // 批量更新余额表的创建人
+      FzrbsBudgetBalance::updateAll($updateData, ['projectid' => $idArr]);
+
+      // 批量记录日志
+      foreach ($idArr as $bid) {
+        $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $this->_operationlog([
+          'catalog' => '非报项目转人',
+          'remark' => "[budgetID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+        ]);
+      }
+    } else if ($id) {
+      // 单条处理
+      $p = FzrbsBudgetProject::findOne($id);
+      if (!$p) return array('errorMessage'=>'项目不存在');
+      // 只有项目创建人才能修改
+      if ($p->creator!=$this->_adminInfo['wxuserid']) return array('errorMessage'=>'没有权限');
+
+      $temp=['creator'=>$newcreator];
+      if ($departmentid){
+        $p->departmentid = $departmentid;
+        $dept = WeixinOaDepartment::findOne($p->departmentid);
+        $p->department=$dept['name'];
+        $temp['departmentid'] = $p->departmentid;
+        $temp['department'] = $dept['name'];
+      }
+      $transaction = Yii::$app->db->beginTransaction();
+      try {
+        $p->save();
+        FzrbsBudgetBalance::updateAll($temp,['projectid'=>$p->id]);
+        // 记录日志
+        $this->_operationlog([
+          'catalog' => '非报项目转人',
+          'remark' => "[budgetID:{$id}] 经办人转给【{$newusername}】"
+        ]);
+      } catch (\Throwable $th) {
+        $transaction->rollBack();
+        return array('errorMessage'=>$th->getMessage());
+      }
+      $transaction->commit();
+    } else {
+      return array('errorMessage' => 'id或ids不能为空');
     }
-    $transaction->commit();
+
     return array('errorMessage'=>'');
+  }
+  // 获取非报项目操作日志
+  public function actionGetoperationlogs(){
+    $bizId = $this->_request['bizId'];
+    $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+    $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
+    $offset = $limit * ($page - 1);
+
+    $query = FzrbsOperationLog::find()
+        ->select('id,catalog,remark,realname,inserttime,username')
+        ->orderBy('inserttime desc');
+
+    if ($bizId) {
+        $query->andWhere("LOCATE('[budgetID:{$bizId}]', remark) > 0");
+    }
+
+    $total = $query->count();
+    $res = $query->limit($limit)->offset($offset)->asArray()->all();
+
+    return ['data'=>$res, 'total'=>$total, 'success'=>true];
   }
   private function sumProjectSpecial($where){
       // // FzrbsBudgetProject未通过决算的，显示为0
@@ -4133,7 +4207,7 @@ class BudgetController extends ApiBase{
     }
 
     $d['title'] = $d['inquire']?'[预询价]'.$d['title']:$d['title'];
-    
+
     $result = array('viewdata'=>$viewdata,'basic'=>$d,'statusCn'=>$this->statusCn);
     return $result;
 

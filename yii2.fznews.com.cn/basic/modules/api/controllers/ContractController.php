@@ -19,6 +19,7 @@ use app\modules\api\models\FzrbsInvoice;
 use app\modules\api\models\FzrbsInvoiceItem;
 use app\modules\api\models\FzrbsInvoicing;
 use app\modules\api\models\FzrbsInvoicingInvoice;
+use app\modules\api\models\FzrbsOperationLog;
 use app\modules\api\models\WeixinOaApprovaldata;
 use app\modules\api\models\WeixinOaApprovalInfo;
 use app\modules\api\models\WeixinOaApprovalLog;
@@ -1193,7 +1194,7 @@ class ContractController extends ApiBase{
     return $paycollection;
   }
   private function getTotalpaycollection($contractid){
-    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$contractid]])->orderBy('contractid desc')->asArray()->one();
+    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$contractid],['=','state',3]])->orderBy('contractid desc')->asArray()->one();
     if ($total && $total['amount']) {
       return $total['amount'];
     }
@@ -1271,7 +1272,7 @@ class ContractController extends ApiBase{
     }
 
     // 目前回款合计
-    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$obj['contractid']]])->groupBy('contractid')->orderBy('contractid desc')->asArray()->one();
+    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$obj['contractid']],['=','state',3]])->groupBy('contractid')->orderBy('contractid desc')->asArray()->one();
 
     // 回款总额不能超过合同总额
     $c = FzrbsContract::findOne($obj['contractid']);
@@ -2243,6 +2244,118 @@ public function actionSaveinvoice(){
     }
     return array('errorMessage'=>'');
 
+  }
+  // 合同转人
+  public function actionAltercreator(){
+    $ids = $this->_request['ids'];  // 批量：逗号分隔的ID
+    $id = $this->_request['id'];    // 单条：单个ID
+
+    $newcreator = $this->_request['creator'];
+    $newsigndeptid = $this->_request['signdeptid'];
+    if (!$newcreator) return array('errorMessage'=>'请选择新经办人');
+
+    // 获取新经办人信息
+    $newuser = WeixinOAUserInfo::find()->where(['userid' => $newcreator])->asArray()->one();
+    $newusername = $newuser['name'] ?? '';
+
+    if ($ids) {
+      // 批量处理
+      $idArr = explode(',', $ids);
+      if (count($idArr) > 20) {
+        return array('errorMessage' => '每次最多转20条');
+      }
+
+      // 先查询原合同信息用于日志
+      $oldContracts = FzrbsContract::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldCreatorMap = [];
+      foreach ($oldContracts as $oc) {
+        $oldCreatorMap[$oc['id']] = $oc['creator'];
+      }
+      // 获取原经办人姓名
+      $oldUserids = array_unique(array_column($oldContracts, 'creator'));
+      $oldUsers = WeixinOAUserInfo::find()->select(['userid', 'name'])->where(['userid' => $oldUserids])->asArray()->all();
+      $oldUserMap = [];
+      foreach ($oldUsers as $ou) {
+        $oldUserMap[$ou['userid']] = $ou['name'];
+      }
+
+      // 使用一条 UPDATE 语句批量更新
+      $updateData = ['creator' => $newcreator];
+      if ($newsigndeptid) {
+        $updateData['signdeptid'] = $newsigndeptid;
+      }
+      FzrbsContract::updateAll($updateData, ['id' => $idArr]);
+
+      // 批量记录日志
+      foreach ($idArr as $bid) {
+        $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $this->_operationlog([
+          'catalog' => '合同转人',
+          'remark' => "[contractID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+        ]);
+      }
+    } else if ($id) {
+      // 单条处理
+      $contract = FzrbsContract::findOne($id);
+      if (!$contract) return array('errorMessage'=>'合同不存在');
+
+      // 检查权限：本人或流程管理员才能操作
+      $isCreator = $contract->creator == $this->_adminInfo['wxuserid'];
+      $hasAuth = $this->haspower('流程管理', $this->agentid, $contract->signdeptid, '');
+      if (!$isCreator && !$hasAuth) {
+        return array('errorMessage'=>'没有权限，只有创建人或【流程管理】权限的人才能操作');
+      }
+
+      $oldcreatorname = $contract->creatorname;
+
+      $transaction = Yii::$app->db->beginTransaction();
+      try {
+        // 更新合同
+        $contract->creator = $newcreator;
+        $contract->creatorname = $newusername;
+        if ($newsigndeptid) {
+          $newdept = WeixinOaDepartment::findOne($newsigndeptid);
+          $contract->signdeptid = $newsigndeptid;
+          $contract->signdept = $newdept['name'] ?? '';
+        }
+        $contract->save();
+
+        // 记录日志
+        $this->_operationlog([
+          'catalog' => '合同转人',
+          'remark' => "[contractID:{$id}] 经办人由【{$oldcreatorname}】转给【{$newusername}】"
+        ]);
+
+        $transaction->commit();
+      } catch (\Throwable $th) {
+        $transaction->rollBack();
+        return array('errorMessage' => $th->getMessage());
+      }
+    } else {
+      return array('errorMessage' => 'id或ids不能为空');
+    }
+
+    return array('errorMessage' => '');
+  }
+  // 获取合同操作日志
+  public function actionGetoperationlogs(){
+    $bizId = $this->_request['bizId'];
+    $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+    $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
+    $offset = $limit * ($page - 1);
+
+    $query = FzrbsOperationLog::find()
+        ->select('id,catalog,remark,realname,inserttime,username')
+        ->orderBy('inserttime desc');
+
+    if ($bizId) {
+        $query->andWhere("LOCATE('[contractID:{$bizId}]', remark) > 0");
+    }
+
+    $total = $query->count();
+    $res = $query->limit($limit)->offset($offset)->asArray()->all();
+
+    return array('data' => $res, 'total' => $total);
   }
   // 发起处置审批
   public function actionStartdeal(){

@@ -1,10 +1,10 @@
 
-import { Badge, Descriptions, Divider, Modal, Tag } from 'antd';
+import { Badge, Descriptions, Divider, Modal, Tag, Tabs } from 'antd';
 import moment from 'moment';
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import Supplementary from './supplementary';
 import { BalanceTypes } from '../budget/config';
-import { getcontract } from './service';
+import { getcontract, getoperationlogs } from './service';
 import './common.css'
 import Filescard from './filescard';
 import PayCollection from './paycollection';
@@ -15,6 +15,7 @@ import AddLedger from './ledger/add';
 import ViewLedger from './ledger/view';
 import Urgelogs from './debt/urgelogs';
 import CollectionGantt from './collectionGantt';
+import OperationLog from '../common/OperationLog';
 const tag:CSSProperties = {
   margin: '0 5px 0 0',
   padding: '0px 4px',
@@ -180,9 +181,36 @@ const View: React.FC<{id:any,paystate:any,attachNumber?:any}> = ({id={},paystate
          <Descriptions.Item label="发票信息" >
             <InvoiceView contractid={id}/>
          </Descriptions.Item>
-         
-         
+
+
       </Descriptions>
+      <Tabs defaultActiveKey="1" items={[
+        {
+          key: '1',
+          label: '合同附件',
+          children: data.fileurls && data.fileurls !== "" ? <Filescard urls={data.fileurls} mode='list' /> : '无附件',
+        },
+        {
+          key: '2',
+          label: '作废证明',
+          children: data.nullifyurls && data.nullifyurls !== "" ? <Filescard urls={data.nullifyurls} mode='list' /> : '无作废证明',
+        },
+        {
+          key: '3',
+          label: '发票信息',
+          children: <InvoiceView contractid={id} />,
+        },
+        {
+          key: '4',
+          label: '履约条件',
+          children: <PayCollection key={refreshkey} contractid={data.id} financechek={true} editable={false} />,
+        },
+        {
+          key: '5',
+          label: '变更记录',
+          children: <OperationLog api={getoperationlogs} bizId={id} />,
+        },
+      ]} />
       {
           data.companyinfo && data.companyinfo.id &&
           

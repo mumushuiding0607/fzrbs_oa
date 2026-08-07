@@ -20,6 +20,9 @@ import PayCollection from './paycollection';
 import StatCard from './statcard';
 
 import Logs from './logs';
+import EditCreatorButton from './EditCreatorButton';
+import OperationLog from '../common/OperationLog';
+import { getoperationlogs } from './service';
 
 import './common.css'
 import Powerlist from './power/powerlist';
@@ -68,6 +71,10 @@ const Listc:React.FC = () =>{
   const formRef = useRef<ProFormInstance>();
   const [viewfileMethod,setViewfileMethod]=useState('')
   const [activeKey, setActiveKey] = useState('tab1');
+  const [logsModalVisible, setLogsModalVisible] = useState(false);
+  const [currentLogId, setCurrentLogId] = useState<number>();
+  const [batchModalVisible, setBatchModalVisible] = useState(false);
+  const [selectedIds, setSelectedIds] = useState('');
 
   // 统一弹窗状态管理
   const [modal, setModal] = useState<{
@@ -161,6 +168,10 @@ const Listc:React.FC = () =>{
       case '上传发票':
         setModal({ type: 'addinvoices', data: record.id })
         break
+      case '变更记录':
+        setCurrentLogId(record.id);
+        setLogsModalVisible(true);
+        break;
       default:
         break;
     }
@@ -531,6 +542,10 @@ const Listc:React.FC = () =>{
                 }
              
                 <Button type="link" onClick={()=>{onMenuClick('上传发票',record)}}>上传发票</Button>
+                <br />
+                <EditCreatorButton obj={record} onSave={() => ref.current?.reload()} />
+                <br />
+                <Button type="text" onClick={()=>{onMenuClick('变更记录',record)}}>变更记录</Button>
 
                 </>)
               }
@@ -646,6 +661,7 @@ const Listc:React.FC = () =>{
             rowSelection={{
               onChange: (_, selectedRows) => {
                 setSelectedRows(selectedRows);
+                setSelectedIds(selectedRows.length > 0 ? selectedRows.map((e: any) => e.id).join(',') : '');
               },
             }}
             
@@ -791,7 +807,14 @@ const Listc:React.FC = () =>{
               <Button onClick={()=>{
                 setModal({ type: 'export' })
 
-              }}>合同信息导出</Button>
+              }}>合同信息导出</Button>,
+              <Button onClick={()=>{
+                if (!selectedIds) {
+                  Modal.error({ title: '请选择要转人的项' });
+                  return;
+                }
+                setBatchModalVisible(true);
+              }}>批量转人</Button>
             ]}
             
           />
@@ -989,6 +1012,20 @@ const Listc:React.FC = () =>{
           setModal({ type: null })
           ref.current?.reload(true)
         }}></Nullify>
+        {/* 变更记录 */}
+        <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+          <OperationLog key={currentLogId} api={getoperationlogs} bizId={currentLogId} />
+        </Modal>
+        {/* 批量转人 */}
+        <EditCreatorButton
+          ids={selectedIds}
+          visible={batchModalVisible}
+          onCancel={() => setBatchModalVisible(false)}
+          onSave={() => {
+            ref.current?.reload();
+            setSelectedIds('');
+          }}
+        />
       </PageContainer>
     </ConfigProvider>
   )

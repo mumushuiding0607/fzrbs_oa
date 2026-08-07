@@ -292,5 +292,32 @@ export async function cancelsyncinvoice(
     params,
   });
 }
+export async function altercreator(data: {}, options?: { [key: string]: any }) {
+  return request('/api/invoicing/altercreator', {
+    data,
+    method: 'POST',
+    ...(options || {}),
+  });
+}
+export async function getoperationlogs(
+  params: {
+    bizId: any;
+    current?: number;
+    pageSize?: number;
+  },
+  options?: { [key: string]: any },
+) {
+  return request<{
+    data: [];
+    total?: number;
+    success?: boolean;
+  }>('/api/invoicing/getoperationlogs', {
+    method: 'GET',
+    params: {
+      ...params,
+    },
+    ...(options || {}),
+  });
+}
 
 

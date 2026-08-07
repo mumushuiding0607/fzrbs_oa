@@ -27,7 +27,7 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
   const [currentNodeStep, setCurrentNodeStep] = useState<number>(0);
   const uploadRef = useRef<any>();
   const handleSave=(e:any)=>{
-   
+
     alterspeech({
       thirdNo:thirdNo,
       step:curitem.step,
@@ -40,6 +40,7 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
       }else{
         setModalVisible(false)
         data.approval[curitem.step].speech = e
+        onUpdate && onUpdate()
       }
     })
   }
@@ -72,9 +73,9 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
       fileurls: fileurls,
     }).then((res: any) => {
       if (res.errorMessage) {
-        Modal.error({ title: res.errorMessage });
+        alert(res.errorMessage);
       } else {
-        message.success('更新成功');
+        alert('更新成功');
         setFileurlsModalVisible(false);
         onUpdate && onUpdate();
       }
@@ -157,22 +158,26 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
                         }
                         {
                           item.fileurls && item.fileurls.length>0 && (
-                            <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
-                              {item.fileurls.split(',').filter(Boolean).map((url: string, idx: number) => {
-                                const fileInfo = getFromUrl(url);
-                                return (
-                                  <span key={idx} style={{display:'inline-flex', alignItems:'center', gap:4}}>
-                                    <a href={fileInfo.url} target="_blank">{fileInfo.name}</a>
-                                    <span style={{color:'gray',fontSize:12}}>{fileInfo.time}</span>
-                                  </span>
-                                );
-                              })}
-                              <Button size="small" type="link" onClick={() => {
-                                const files = item.fileurls ? item.fileurls.split(',').filter(Boolean).map((url: string) => getFromUrl(url)) : [];
-                                setCurrentNodeFileurls(files);
-                                setCurrentNodeStep(index);
-                                setFileurlsModalVisible(true);
-                              }}>更新附件</Button>
+                            <div style={{display:'flex', flexDirection:'row', gap:8, alignItems:'flex-start'}}>
+                              <div style={{flex:1, display:'flex', flexDirection:'column', gap:4}}>
+                                {item.fileurls.split(',').filter(Boolean).map((url: string, idx: number) => {
+                                  const fileInfo = getFromUrl(url);
+                                  return (
+                                    <span key={idx} style={{display:'inline-flex', alignItems:'center', gap:4}}>
+                                      <a href={fileInfo.url} target="_blank">{fileInfo.name}</a>
+                                      <span style={{color:'gray',fontSize:12}}>{fileInfo.time}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              <div style={{width:80}}>
+                                <Button size="small" type="link" onClick={() => {
+                                  const files = item.fileurls ? item.fileurls.split(',').filter(Boolean).map((url: string) => getFromUrl(url)) : [];
+                                  setCurrentNodeFileurls(files);
+                                  setCurrentNodeStep(index);
+                                  setFileurlsModalVisible(true);
+                                }}>更新</Button>
+                              </div>
                             </div>
                           )
                         }
@@ -203,7 +208,9 @@ const Flow: React.FC<{data:any,thirdNo?:any,step?:any,statusCn?:any,condition?:a
           onCancel={() => setFileurlsModalVisible(false)}
           okText="保存"
           cancelText="取消"
+          zIndex={2000}
         >
+
           <MyUploadFile
             name="fileurls"
             label="附件："

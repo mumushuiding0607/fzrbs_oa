@@ -34,3 +34,5 @@ export const delurgelog = (data: any) => request('contract/delurgelog', {...data
 export const geturgelogs = (data: any) => request('contract/geturgelogs', {...data,wxuserid:data.wxuserid||wxuserid}, 'post')
 
 export const endurge = (data: any) => request('contract/endurge', {...data,wxuserid:data.wxuserid||wxuserid}, 'post')
+
+export const paycollectionchecklist = (data: any) => request('budget/paycollectionchecklist', {...data,wxuserid:data.wxuserid||wxuserid}, 'post')

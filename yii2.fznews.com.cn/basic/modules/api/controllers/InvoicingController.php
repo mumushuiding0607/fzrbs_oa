@@ -21,6 +21,7 @@ use app\modules\api\models\FzrbsInvoicingInvoice;
 use app\modules\api\models\FzrbsInvoicingInvoicer;
 use app\modules\api\models\FzrbsInvoicingItem;
 use app\modules\api\models\FzrbsInvoicingTemplate;
+use app\modules\api\models\FzrbsOperationLog;
 use app\modules\api\models\WeixinFinanceCompany;
 use app\modules\api\models\WeixinOaApprovaldata;
 use app\modules\api\models\WeixinOaApprovalInfo;
@@ -511,7 +512,7 @@ class InvoicingController extends ApiBase{
             $temp->contractid = $contractid;
             $temp->save();
           }
-          $total = Yii::$app->db->createCommand("SELECT sum(amount) as amount FROM ".FzrbsContractPaycollection::tableName()." where contractid=".$contractid."  group by contractid")->queryOne();
+          $total = Yii::$app->db->createCommand("SELECT sum(amount) as amount FROM ".FzrbsContractPaycollection::tableName()." where contractid=".$contractid." and state=3 group by contractid")->queryOne();
           Yii::$app->db->createCommand()->update(FzrbsContract::tableName(), ['paycollection' => $total['amount']], ['=', "id", $contractid])->execute();
           // 更新项目已收款
           $this->updateProReceivedWhenPaycheck($contractid);
@@ -1720,7 +1721,7 @@ class InvoicingController extends ApiBase{
     return $paycollection;
   }
   private function getTotalpaycollection($contractid){
-    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$contractid]])->orderBy('contractid desc')->asArray()->one();
+    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$contractid],['=','state',3]])->orderBy('contractid desc')->asArray()->one();
     if ($total && $total['amount']) {
       return $total['amount'];
     }
@@ -3243,6 +3244,128 @@ public function actionStartflow(){
 		
 		return array('ret'=>1);
 	}
+  // 开票转人
+  public function actionAltercreator(){
+    $ids = $this->_request['ids'];  // 批量：逗号分隔的ID
+    $id = $this->_request['id'];    // 单条：单个ID
+    $newcreator = $this->_request['creator'];
+    $newdepartmentid = $this->_request['departmentid'];
+    if (!$newcreator) return array('errorMessage'=>'请选择新经办人');
+
+    // 获取新经办人信息
+    $newuser = $this->getUserinfo($newcreator);
+    $newusername = $newuser['name'] ?? '';
+
+    if ($ids) {
+      // 批量处理
+      $idArr = explode(',', $ids);
+      if (count($idArr) > 20) {
+        return array('errorMessage' => '每次最多转20条');
+      }
+
+      // 先查询原开票信息用于日志
+      $oldInvoicings = FzrbsInvoicing::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldCreatorMap = [];
+      foreach ($oldInvoicings as $oi) {
+        $oldCreatorMap[$oi['id']] = $oi['creator'];
+      }
+      // 获取原经办人姓名
+      $oldUserids = array_unique(array_column($oldInvoicings, 'creator'));
+      $oldUsers = WeixinOAUserInfo::find()->select(['userid', 'name'])->where(['userid' => $oldUserids])->asArray()->all();
+      $oldUserMap = [];
+      foreach ($oldUsers as $ou) {
+        $oldUserMap[$ou['userid']] = $ou['name'];
+      }
+
+      // 使用一条 UPDATE 语句批量更新
+      $updateData = ['creator' => $newcreator];
+      if ($newdepartmentid) {
+        $updateData['departmentid'] = $newdepartmentid;
+      }
+      FzrbsInvoicing::updateAll($updateData, ['id' => $idArr]);
+
+      // 同时更新对应的发票明细记录
+      FzrbsInvoicingItem::updateAll(['creator' => $newcreator], ['invoicingid' => $idArr]);
+
+      // 批量记录日志
+      foreach ($idArr as $bid) {
+        $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $this->_operationlog([
+          'catalog' => '开票转人',
+          'remark' => "[invoicingID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+        ]);
+      }
+    } else if ($id) {
+      // 单条处理
+      $invoicing = FzrbsInvoicing::findOne($id);
+      if (!$invoicing) return array('errorMessage'=>'开票申请不存在');
+
+      // 检查权限：本人或流程管理员才能操作
+      $isCreator = $invoicing->creator == $this->_adminInfo['wxuserid'];
+      $hasAuth = $this->haspower('流程管理', $this->agentId, $invoicing->departmentid, '');
+      if (!$isCreator && !$hasAuth) {
+        return array('errorMessage'=>'没有权限，只有创建人或【流程管理】权限的人才能操作');
+      }
+
+      $oldcreatorname = $invoicing->creatorname ?? '';
+
+      // 获取部门信息
+      $newdept = [];
+      if ($newdepartmentid) {
+        $newdept = WeixinOaDepartment::findOne($newdepartmentid);
+      }
+
+      $transaction = Yii::$app->db->beginTransaction();
+      try {
+        // 更新开票申请
+        $invoicing->creator = $newcreator;
+        if ($newuser) {
+          $invoicing->creator = $newuser['userid'];
+          $invoicing->creatorname = $newusername;
+        }
+        if ($newdept) {
+          $invoicing->departmentid = $newdepartmentid;
+          $invoicing->department = $newdept['name'] ?? '';
+        }
+        $invoicing->save();
+
+        // 记录日志
+        $this->_operationlog([
+          'catalog' => '开票转人',
+          'remark' => "[invoicingID:{$id}] 经办人由【{$oldcreatorname}】转给【{$newusername}】"
+        ]);
+
+        $transaction->commit();
+      } catch (\Throwable $th) {
+        $transaction->rollBack();
+        return array('errorMessage' => $th->getMessage());
+      }
+    } else {
+      return array('errorMessage' => 'id或ids不能为空');
+    }
+
+    return array('errorMessage' => '');
+  }
+  // 获取开票操作日志
+  public function actionGetoperationlogs(){
+    $bizId = $this->_request['bizId'];
+    $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+    $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
+    $offset = $limit * ($page - 1);
+
+    $query = FzrbsOperationLog::find()
+        ->select('id,catalog,remark,realname,inserttime,username')
+        ->orderBy('inserttime desc');
+
+    if ($bizId) {
+        $query->andWhere("LOCATE('[invoicingID:{$bizId}]', remark) > 0");
+    }
+
+    $total = $query->count();
+    $res = $query->limit($limit)->offset($offset)->asArray()->all();
+
+    return array('data' => $res, 'total' => $total);
+  }
 // ================== 设置流程 ======================
   public function actionGettmplatelist(){
     $total = 0;

@@ -212,7 +212,7 @@ class InvoicingsyncController extends Controller
         Yii::$app->db->createCommand()->insert(FzrbsContractPaycollection::tableName(), $data)->execute();
         // 更新对应合同的总收款
         if ($data['contractid']){
-          $total = Yii::$app->db->createCommand("SELECT sum(amount) as amount FROM ".FzrbsContractPaycollection::tableName()." where contractid=".$data['contractid']."  group by contractid")->queryOne();
+          $total = Yii::$app->db->createCommand("SELECT sum(amount) as amount FROM ".FzrbsContractPaycollection::tableName()." where contractid=".$data['contractid']." and state=3 group by contractid")->queryOne();
           Yii::$app->db->createCommand()->update(FzrbsContract::tableName(), ['paycollection' => $total['amount']], ['=', "id", $data['contractid']])->execute();
           try {
             $this->updateProReceivedWhenPaycheck($data['contractid']);

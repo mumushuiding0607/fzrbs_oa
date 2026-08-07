@@ -5,23 +5,39 @@ import UserAutocomplete from '../../budget/common/userAutocomplete';
 import { altercreator } from './service';
 
 
-const EditCreatorButton: React.FC<{obj?:any,onSave?:Function}> = ({obj,onSave}) =>{
+const EditCreatorButton: React.FC<{obj?:any, ids?:string, visible?:boolean, onCancel?:Function, onSave?:Function}> = ({obj, ids, visible, onCancel, onSave}) =>{
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
- 
+  // 受控模式：由外部控制显隐
+  const isControlled = visible !== undefined;
+  const isOpen = isControlled ? visible : open;
+
   // 打开弹窗时初始化数据
   const handleOpen = () => {
-    form.setFieldsValue({
-      departmentId: obj.signdeptid, // 设置默认值
-    });
-    setOpen(true);
+    if (ids) {
+      // 批量模式：不需要初始化数据
+      form.resetFields();
+    } else {
+      // 单条模式：初始化数据
+      form.setFieldsValue({
+        id: obj.id,
+        departmentid: obj.departmentid,
+      });
+    }
+    if (!isControlled) {
+      setOpen(true);
+    }
   };
 
   // 取消
   const handleCancel = () => {
     form.resetFields();
-    setOpen(false);
+    if (isControlled) {
+      onCancel && onCancel();
+    } else {
+      setOpen(false);
+    }
   };
 
   // 确定保存
@@ -32,24 +48,60 @@ const EditCreatorButton: React.FC<{obj?:any,onSave?:Function}> = ({obj,onSave}) 
       if (values.creator && typeof values.creator === 'object') {
         values.creator = values.creator.value;
       }
-      altercreator(values).then((res:any)=>{
+
+      // 组装请求数据
+      const data = ids ? { ...values, ids } : { ...values, id: obj.id };
+
+      altercreator(data).then((res:any)=>{
         if (res.errorMessage){
           Modal.error({
             title: res.errorMessage,
           });
         }else{
-          setOpen(false);
+          handleCancel();
           Modal.info({
             title: '保存成功',
           });
           onSave && onSave(res)
         }
       })
- 
+
     } catch (error) {
       console.log('校验失败:', error);
     }
   };
+
+  // 如果是受控模式，不渲染触发按钮
+  if (isControlled) {
+    return (
+      <Modal
+        title={ids ? '批量转人' : '项目转人'}
+        visible={isOpen}
+        onOk={handleOk}
+        onCancel={handleCancel}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Form form={form} layout="vertical">
+          {!ids && (
+            <Form.Item label="id" name="id" style={{display:'none'}}>
+              <Input disabled/>
+            </Form.Item>
+          )}
+          <Form.Item
+            name="departmentid"
+            label="创建部门"
+            rules={[{ required: true, message: '请选择创建部门' }]}
+          >
+            <DepartmentTreeSelect multiple={false} />
+          </Form.Item>
+          <Form.Item  label="责任人"  name="creator" rules={[{ required: true, message: '请选择责任人' }]}>
+              <UserAutocomplete multiple={false} placeholder='选择用户'/>
+          </Form.Item>
+        </Form>
+      </Modal>
+    );
+  }
 
   return (
     <>
@@ -60,7 +112,7 @@ const EditCreatorButton: React.FC<{obj?:any,onSave?:Function}> = ({obj,onSave}) 
 
       {/* 弹窗 */}
       <Modal
-        title="修改"
+        title="项目转人"
         visible={open}
         onOk={handleOk}
         onCancel={handleCancel}
@@ -76,9 +128,9 @@ const EditCreatorButton: React.FC<{obj?:any,onSave?:Function}> = ({obj,onSave}) 
             label="创建部门"
             rules={[{ required: true, message: '请选择创建部门' }]}
           >
-            <DepartmentTreeSelect multiple={false} defaultValue={obj.departmentid}/>
+            <DepartmentTreeSelect multiple={false} />
           </Form.Item>
-          <Form.Item  label="责任人"  name="creator" rules={[{ required: true, message: 'Please input!' }]}>
+          <Form.Item  label="责任人"  name="creator" rules={[{ required: true, message: '请选择责任人' }]}>
               <UserAutocomplete multiple={false} placeholder='选择用户'/>
           </Form.Item>
         </Form>

@@ -90,9 +90,9 @@
           placeholder="输入关键字: 合同名称、经办等"
         >
         </Field>
-        
+
         <span class="btn" @click="onSearch(4)">搜索</span>
-        
+
       </div>
       <List
         :loading="loading[4]"
@@ -105,7 +105,21 @@
 
           <listitem  :data="item"></listitem>
         </div>
-          
+
+      </List>
+    </Tab>
+
+    <Tab title="回款">
+      <List
+        :loading="loading[3]"
+        :finished="finished[3]"
+        finished-text="没有更多了"
+        offset="10"
+        @load="loaddata(3)"
+      >
+        <div v-for="item in datas[3]" :key="item.id" :title="item" class="listitem" @click="viewPayCollection(item)">
+          <listitem  :data="item"></listitem>
+        </div>
       </List>
     </Tab>
 
@@ -123,7 +137,7 @@ import { Tabs,Tab,Field } from 'vant';
 import { List,Cell,Image } from 'vant';
 import Button from 'vant/lib/button';
 import { useUserStore } from '@/stores';
-import { debtlist, finishlist, inglist, urgelogslist } from './api';
+import { debtlist, finishlist, inglist, urgelogslist, paycollectionchecklist } from './api';
 import AddLog from './addLog.vue';
 import Contract_Select from '../invoice/components/Contract_Select.vue';
 const cacheStore = useUserStore()
@@ -171,10 +185,14 @@ const cacheStore = useUserStore()
         this.urgelog = e
       },
       viewDebt(e:any){
-        
+
         var q = {thirdNo:e.thirdNo,contractid:e.contractid||e.id}
         console.log(q)
         this.$router.push({name:'contract_debturge',query:q})
+      },
+      viewPayCollection(e:any){
+        var q = {contractid: e.id}
+        this.$router.push({name:'feibaoxitong_viewcollection', query:q})
       },
       onSearch(tab:any){
         
@@ -207,7 +225,7 @@ const cacheStore = useUserStore()
             res = await urgelogslist(par)
             break;
           case 3:
-           
+            res = await paycollectionchecklist(par)
             break
           case 4:
             res = await debtlist(par)
