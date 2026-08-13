@@ -790,7 +790,7 @@ class BudgetController extends ApiBase{
     }
 
     // 更新step为新节点索引（第一个添加的节点）
-    $newStep = count($flowDataArr['data']['ApprovalNodes']['ApprovalNode']) - 3;
+    $newStep = count($flowDataArr['data']['ApprovalNodes']['ApprovalNode']) - count($nodeRoles);
     $flowDataArr['step'] = $newStep;
     $flowDataArr['data']['approverstep'] = $newStep;
     $flowDataArr['data']['OpenSpstatus'] = 1;
@@ -821,7 +821,7 @@ class BudgetController extends ApiBase{
       // 记录勘误申请日志
       $this->_operationlog([
         'catalog' => '勘误申请',
-        'remark' => "[项目ID:{$projectId}] 项目【{$project->title}】执行勘误申请，重新激活流程添加经审小组审批节点"
+        'remark' => "[budgetID:{$projectId}] 项目【{$project->title}】执行勘误申请，重新激活流程添加经审小组审批节点"
       ]);
 
       return array('success' => true, 'thirdNo' => $thirdNo);
@@ -1431,6 +1431,10 @@ class BudgetController extends ApiBase{
         if (!$this->haspower('编辑',$this->agentId,$old['departmentid'],$old['creator'])) {
           return array('errorMessage'=>'需要【编辑】权限');
         }
+        // 正在审批中的项目不允许修改（只有offline项目可以）
+        if (!empty($old['thirdno']) && $old['reject'] != 1 && $old['offline'] != 1) {
+          return array('errorMessage'=>'项目正在审批中,需要当前审批人驳回之后方能操作');
+        }
         
         
         
@@ -1472,9 +1476,11 @@ class BudgetController extends ApiBase{
           if(in_array($old['type'],$this->specialprojecttype())&&$old['type']!=$obj['type']){
             $obj['directsubmit']=0;
             if ($old['thirdno']){
+              // 将对应的审批流程状态设置为已取消
+              WeixinOaApprovalInfo::updateAll(['status'=>4],["thirdNo"=>$old['thirdno'],"agentId"=>$this->agentId]);
               $obj['thirdno']='';
               $action = '非报项目修改项目类型';
-              $remark = $action . "操作人=" . $this->userinfo['name'] . "，项目名称：".$old['title']."，因项目类型修改，审批流程【".$old['thirdno']."】自动取消";
+              $remark = "[budgetID:{$old['id']}]操作人=" . $this->userinfo['name'] . "，项目名称：".$old['title']."，因项目类型修改，审批流程【".$old['thirdno']."】自动取消";
               $this->_operationlog(['catalog' => $action, 'remark' => $remark]);
             }
             $obj['reject']=0;
@@ -1497,12 +1503,70 @@ class BudgetController extends ApiBase{
           
         }
         if (!$obj['state']) unset($obj['state']);
+
+        // 记录字段变更日志
+        $changeLogs = [];
+        // 需要记录的字段及其标签
+        $trackFields = [
+          'type' => '项目类别',
+          'state' => '审批状态',
+          'title' => '项目名称',
+          'budget' => '预算金额',
+          'finalincome' => '决算金额',
+          'departmentid' => '所属部门',
+          'pdepartmentid' => '立项部门',
+          'charger' => '负责人',
+          'performanceratio' => '预算绩效比例',
+          'finalperformanceratio' => '决算绩效比例',
+          'contractamount' => '合同总价',
+          'receivedmoney' => '已回款金额',
+        ];
+        foreach ($trackFields as $field => $label) {
+          if (isset($obj[$field]) && $obj[$field] != $old[$field]) {
+            $oldVal = $old[$field];
+            $newVal = $obj[$field];
+
+            // 对项目类别和审批状态进行字典翻译
+            if ($field == 'type') {
+              $oldDict = FzrbsBudgetDict::find()->where(['and',['=','type','项目类别'],['=','value',$oldVal]])->asArray()->one();
+              $newDict = FzrbsBudgetDict::find()->where(['and',['=','type','项目类别'],['=','value',$newVal]])->asArray()->one();
+              $oldVal = $oldDict['label'] ?? $oldVal;
+              $newVal = $newDict['label'] ?? $newVal;
+            } else if ($field == 'state') {
+              $oldDict = FzrbsBudgetDict::find()->where(['and',['=','type','审批类型'],['=','value',$oldVal]])->asArray()->one();
+              $newDict = FzrbsBudgetDict::find()->where(['and',['=','type','审批类型'],['=','value',$newVal]])->asArray()->one();
+              $oldVal = $oldDict['label'] ?? $oldVal;
+              $newVal = $newDict['label'] ?? $newVal;
+            } else if (in_array($field, ['budget', 'finalincome', 'contractamount', 'receivedmoney'])) {
+              $oldVal = is_numeric($oldVal) ? number_format($oldVal, 2) : ($oldVal ?? '');
+              $newVal = is_numeric($newVal) ? number_format($newVal, 2) : ($newVal ?? '');
+            } else if (in_array($field, ['performanceratio', 'finalperformanceratio'])) {
+              $oldVal = is_numeric($oldVal) ? ($oldVal * 100) . '%' : ($oldVal ?? '');
+              $newVal = is_numeric($newVal) ? ($newVal * 100) . '%' : ($newVal ?? '');
+            }
+
+            $changeLogs[] = "【{$label}】: {$oldVal} → {$newVal}";
+          }
+        }
+
+        // 特殊处理 thirdno 清空的情况（仅当不是因项目类型变更导致的清空）
+        if (isset($obj['thirdno']) && empty($obj['thirdno']) && !empty($old['thirdno'])) {
+          $changeLogs[] = "【审批编号】: {$old['thirdno']} → (已取消)";
+        }
+
+        if (!empty($changeLogs)) {
+          $this->_operationlog([
+            'catalog' => '非报项目修改',
+            'remark' => "[budgetID:{$old['id']}]项目【{$obj['title']}】变更: " . implode(', ', $changeLogs)
+          ]);
+        }
+
         FzrbsBudgetProject::updateAll($obj,['id'=>$obj['id']]);
 
         // 修改执行绩效比例performanceratio和finalperformanceratio，需要更新预算和决算的绩效比例
         if($obj['performanceratio']!=$old['performanceratio']||$obj['finalperformanceratio']!=$old['finalperformanceratio']){
           $temp = $this->getProjectRealexpend($obj['id']);
-      
+
           $old->realbudgetexpend = $temp['realbudgetexpend'];
           $old->realfinalexpend = $temp['realfinalexpend'];
           $old->budgetbonus = $temp['budgetbonus'];
@@ -1512,21 +1576,6 @@ class BudgetController extends ApiBase{
           $old->save();
         }
 
-        if ($old['type']!=$obj['type']){
-          // 保存日志
-          $dics = FzrbsBudgetDict::find()->where(['and',['=','type','项目类别'],['in','value',[$old['type'],$obj['type']]]])->asArray()->all();
-          // dics 转换成对象
-          if ($dics){
-            $dics = array_column($dics, 'label', 'value');
-          }
-          $dics2 = FzrbsBudgetDict::find()->where(['and',['=','type','审批类型'],['in','value',[$old['state'],$obj['state']]]])->asArray()->all();
-          // dics 转换成对象
-          if ($dics2){
-            $dics2 = array_column($dics2, 'label', 'value');
-          }
-          $this->_operationlog(['catalog' => "修改项目【".$obj['title']."】的类型：", 'remark' => "项目【".$obj['title']."】,history=[".$old['history']."],类型【".$dics[$old['type']]."】->【".$dics[$obj['type']]."】，状态：【".$dics2[$old['state']]."】->【".$dics2[$obj['state']]."】"]);
-        }
-      
       } else {
 
         // 纯新媒体业务、其他业务，只需要提交计量
@@ -1552,6 +1601,10 @@ class BudgetController extends ApiBase{
         $p->save();
         $obj['state'] = $p->state;
         $obj['id'] = $p->id;
+        $this->_operationlog([
+            'catalog' => '新增项目',
+            'remark' => "[budgetID:{$p->id}] 新增项目【{$obj['title']}】创建人【{$this->userinfo['name']}】"
+        ]);
       }
 
       
@@ -2151,7 +2204,12 @@ class BudgetController extends ApiBase{
       }
     }
     if (sizeof($dept)){
-      $where[] = ['or',['in' , 'p.departmentid' , $dept],['in' , 'p.pdepartmentid' , $dept]];
+      $where[] = ['or',
+        ['in' , 'p.departmentid' , $dept],
+        ['in' , 'p.pdepartmentid' , $dept],
+        ['=', 'p.creator', $userid],
+        ['=', 'p.charger', $userid]
+      ];
     }else {
       $where[] = ['or',['=','p.creator',$userid],['=','p.charger',$userid]];
     }
@@ -2549,7 +2607,7 @@ class BudgetController extends ApiBase{
       if ($diffContent !== '无变化') {
         $this->_operationlog([
           'catalog' => '预算决算变更',
-          'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+          'remark' => "[budgetID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
         ]);
       }
     } else {
@@ -2557,7 +2615,7 @@ class BudgetController extends ApiBase{
       if ($diffContent !== '无变化') {
         $this->_operationlog([
           'catalog' => '预算决算变更',
-          'remark' => "[项目ID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
+          'remark' => "[budgetID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
         ]);
       }
     }
@@ -2739,10 +2797,12 @@ class BudgetController extends ApiBase{
       }
 
       // 先查询原项目信息用于日志
-      $oldProjects = FzrbsBudgetProject::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldProjects = FzrbsBudgetProject::find()->select(['id', 'creator', 'title'])->where(['id' => $idArr])->asArray()->all();
       $oldCreatorMap = [];
+      $titleMap = [];
       foreach ($oldProjects as $op) {
         $oldCreatorMap[$op['id']] = $op['creator'];
+        $titleMap[$op['id']] = $op['title'];
       }
       // 获取原创建人姓名
       $oldUserids = array_unique(array_column($oldProjects, 'creator'));
@@ -2767,11 +2827,15 @@ class BudgetController extends ApiBase{
       // 批量记录日志
       foreach ($idArr as $bid) {
         $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $title = $titleMap[$bid] ?? '';
         $this->_operationlog([
           'catalog' => '非报项目转人',
-          'remark' => "[budgetID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+          'remark' => "[budgetID:{$bid}] 项目【{$title}】创建人由【{$oldCreatorName}】转给【{$newusername}】"
         ]);
       }
+      // 通知新创建人
+      $firstProject = FzrbsBudgetProject::findOne($idArr[0]);
+      $this->send($newcreator, '您成为项目【' . $firstProject->title . '】的新创建人', $firstProject);
     } else if ($id) {
       // 单条处理
       $p = FzrbsBudgetProject::findOne($id);
@@ -2787,14 +2851,17 @@ class BudgetController extends ApiBase{
         $temp['departmentid'] = $p->departmentid;
         $temp['department'] = $dept['name'];
       }
+      $oldCreatorName = $p->creatorname ?? '';
       $transaction = Yii::$app->db->beginTransaction();
       try {
         $p->save();
         FzrbsBudgetBalance::updateAll($temp,['projectid'=>$p->id]);
+        // 通知新创建人
+        $this->send($newcreator, '您成为项目【' . $p->title . '】的新创建人', $p);
         // 记录日志
         $this->_operationlog([
           'catalog' => '非报项目转人',
-          'remark' => "[budgetID:{$id}] 经办人转给【{$newusername}】"
+          'remark' => "[budgetID:{$id}] 项目【{$p->title}】创建人由【{$oldCreatorName}】转给【{$newusername}】"
         ]);
       } catch (\Throwable $th) {
         $transaction->rollBack();
@@ -3594,11 +3661,21 @@ class BudgetController extends ApiBase{
     $limit = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
     $offset = $limit * ($page - 1);
 
-    $pattern = "[项目ID:{$projectid}]";
+    // 1. 通过 projectid 直接查询
+    $pattern = "[budgetID:{$projectid}]";
+
+    // 2. 通过 thirdNo 映射查询（催办、撤销审批等日志）
+    $thirdNo = $project->thirdno ?? '';
+
+    // 移除 catalog 限制，查询所有包含 [budgetID:xxx] 或 thirdNo 的日志
     $query = FzrbsOperationLog::find()
-      ->select('id,catalog,remark,realname,inserttime')
-      ->where(['=', 'catalog', '预算决算变更'])
-      ->andWhere("LOCATE('{$pattern}', remark) > 0");
+      ->select('id,catalog,remark,realname,inserttime');
+
+    if ($thirdNo) {
+      $query->andWhere("LOCATE('{$pattern}', remark) > 0 OR LOCATE('{$thirdNo}', remark) > 0");
+    } else {
+      $query->andWhere("LOCATE('{$pattern}', remark) > 0");
+    }
 
     $total = $query->count();
     $res = $query->orderBy('inserttime desc')
@@ -3607,9 +3684,10 @@ class BudgetController extends ApiBase{
       ->asArray()
       ->all();
 
-    // 去掉remark里的项目ID前缀和项目名，保留"修改了【xxx】"，去掉"变更内容："前缀
+    // 去掉 remark 里的前缀
     foreach ($res as &$row) {
-      $row['remark'] = preg_replace('/^\[项目ID:\d+\]\s*项目【[^】]*】\s*/', '', $row['remark']);
+      $row['remark'] = preg_replace('/^\[budgetID:\d+\]\s*/', '', $row['remark']);
+      $row['remark'] = preg_replace('/^项目【[^】]*】\s*/', '', $row['remark']);
       $row['remark'] = preg_replace('/变更内容：[\s\n\r]*/', '', $row['remark']);
       $row['inserttime'] = $row['inserttime'] ? date('Y-m-d H:i:s', $row['inserttime']) : '';
     }
@@ -4137,11 +4215,11 @@ class BudgetController extends ApiBase{
       $isLeader = false; // 是否是分管领导
       $notShowCountersign = 0; // 是否显示会签按钮;
       if ((!$d||!$d['id']) && $projectid){
-        
+
           $d=FzrbsBudgetProject::find()->alias('p')->select('p.*,u.avatar as avatar,u.name as userName,d.label as protypename,dp.name as pdepartment')->leftJoin(['d'=>FzrbsBudgetDict::tableName()],'d.value=p.type')->leftJoin(['u'=>WeixinOAUserInfo::tableName()],'p.creator=u.userid')->leftJoin(['dp'=>WeixinOaDepartment::tableName()],'dp.id=p.pdepartmentid')->where(['p.id'=>$projectid])->asArray()->one();
           $d['status']=$info['status'];
           $d['statusname']=$this->statusCn[$info['status']];
-          $d['thirdno']= $info['thirdNo'];
+          $d['thirdno']=$info['thirdNo'];
           if ($typename) $d['typename']=$typename;
           
           
@@ -4207,7 +4285,7 @@ class BudgetController extends ApiBase{
     }
 
     $d['title'] = $d['inquire']?'[预询价]'.$d['title']:$d['title'];
-
+    $d['thirdno'] = isset($d['thirdNo'])?$d['thirdNo']:$d['thirdno'];
     $result = array('viewdata'=>$viewdata,'basic'=>$d,'statusCn'=>$this->statusCn);
     return $result;
 
@@ -5091,7 +5169,7 @@ class BudgetController extends ApiBase{
     }
     $this->_operationlog([
       'catalog' => '预算决算变更',
-      'remark' => "[项目ID:{$project['id']}] 项目【{$project['title']}】" . implode('，', $changes)
+      'remark' => "[budgetID:{$project['id']}] 项目【{$project['title']}】" . implode('，', $changes)
     ]);
   }
 

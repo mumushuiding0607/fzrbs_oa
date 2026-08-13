@@ -2266,10 +2266,12 @@ public function actionSaveinvoice(){
       }
 
       // 先查询原合同信息用于日志
-      $oldContracts = FzrbsContract::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldContracts = FzrbsContract::find()->select(['id', 'creator', 'title'])->where(['id' => $idArr])->asArray()->all();
       $oldCreatorMap = [];
+      $titleMap = [];
       foreach ($oldContracts as $oc) {
         $oldCreatorMap[$oc['id']] = $oc['creator'];
+        $titleMap[$oc['id']] = $oc['title'];
       }
       // 获取原经办人姓名
       $oldUserids = array_unique(array_column($oldContracts, 'creator'));
@@ -2289,9 +2291,10 @@ public function actionSaveinvoice(){
       // 批量记录日志
       foreach ($idArr as $bid) {
         $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $title = $titleMap[$bid] ?? '';
         $this->_operationlog([
           'catalog' => '合同转人',
-          'remark' => "[contractID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+          'remark' => "[contractID:{$bid}] 合同【{$title}】经办人由【{$oldCreatorName}】转给【{$newusername}】"
         ]);
       }
     } else if ($id) {
@@ -2314,16 +2317,17 @@ public function actionSaveinvoice(){
         $contract->creator = $newcreator;
         $contract->creatorname = $newusername;
         if ($newsigndeptid) {
-          $newdept = WeixinOaDepartment::findOne($newsigndeptid);
           $contract->signdeptid = $newsigndeptid;
-          $contract->signdept = $newdept['name'] ?? '';
         }
         $contract->save();
+
+        // 通知新经办人 (4参数)
+        $this->send($newcreator, '您成为合同【' . $contract->title . '】的新经办人', ['title' => $contract->title, 'serial' => $contract->serial], 1);
 
         // 记录日志
         $this->_operationlog([
           'catalog' => '合同转人',
-          'remark' => "[contractID:{$id}] 经办人由【{$oldcreatorname}】转给【{$newusername}】"
+          'remark' => "[contractID:{$id}] 合同【{$contract->title}】经办人由【{$oldcreatorname}】转给【{$newusername}】"
         ]);
 
         $transaction->commit();

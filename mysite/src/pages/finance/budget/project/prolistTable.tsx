@@ -300,7 +300,7 @@ const ProlistTable: React.FC<{projectid:any}> = ({projectid}) =>{
         onCancel={() => setModalh(false)}
         footer={null}
       >
-        <Viewflow key={refresh}  projectid={select.id} state={select.approvaltype||select.state} ></Viewflow>
+        <Viewflow key={refresh} thirdno={select.thirdno||select.thirdNo} projectid={select.id} state={select.approvaltype||select.state} ></Viewflow>
       </Modal></>
   )
 }

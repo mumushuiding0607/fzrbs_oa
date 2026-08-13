@@ -781,7 +781,10 @@ class InvoicingController extends ApiBase{
         // 设置操作人所在部门
         $c->departmentid = $this->userinfo['departmentid'];
         $c->save();
-
+        $this->_operationlog([
+            'catalog' => '新增开票申请',
+            'remark' => "[invoicingID:{$c->id}] 新增开票申请【{$c->title}】金额【{$c->amount}】创建人【{$this->userinfo['name']}】"
+        ]);
 
         if ($invoicers){
           $userids = implode('|',array_column($invoicers,'userid'));
@@ -3264,10 +3267,12 @@ public function actionStartflow(){
       }
 
       // 先查询原开票信息用于日志
-      $oldInvoicings = FzrbsInvoicing::find()->select(['id', 'creator'])->where(['id' => $idArr])->asArray()->all();
+      $oldInvoicings = FzrbsInvoicing::find()->select(['id', 'creator', 'title'])->where(['id' => $idArr])->asArray()->all();
       $oldCreatorMap = [];
+      $titleMap = [];
       foreach ($oldInvoicings as $oi) {
         $oldCreatorMap[$oi['id']] = $oi['creator'];
+        $titleMap[$oi['id']] = $oi['title'];
       }
       // 获取原经办人姓名
       $oldUserids = array_unique(array_column($oldInvoicings, 'creator'));
@@ -3290,11 +3295,15 @@ public function actionStartflow(){
       // 批量记录日志
       foreach ($idArr as $bid) {
         $oldCreatorName = $oldUserMap[$oldCreatorMap[$bid]] ?? '';
+        $title = $titleMap[$bid] ?? '';
         $this->_operationlog([
           'catalog' => '开票转人',
-          'remark' => "[invoicingID:{$bid}] 经办人由【{$oldCreatorName}】转给【{$newusername}】"
+          'remark' => "[invoicingID:{$bid}] 开票申请【{$title}】经办人由【{$oldCreatorName}】转给【{$newusername}】"
         ]);
       }
+      // 通知新经办人
+      $firstInv = FzrbsInvoicing::findOne($idArr[0]);
+      $this->send($newcreator, '您成为开票申请【' . ($firstInv->title ?? '') . '】的新经办人', $firstInv);
     } else if ($id) {
       // 单条处理
       $invoicing = FzrbsInvoicing::findOne($id);
@@ -3329,10 +3338,14 @@ public function actionStartflow(){
         }
         $invoicing->save();
 
+        // 通知新经办人
+        $invoicingTitle = $invoicing->title ?? '';
+        $this->send($newcreator, '您成为开票申请【' . $invoicingTitle . '】的新经办人', $invoicing);
+
         // 记录日志
         $this->_operationlog([
           'catalog' => '开票转人',
-          'remark' => "[invoicingID:{$id}] 经办人由【{$oldcreatorname}】转给【{$newusername}】"
+          'remark' => "[invoicingID:{$id}] 开票申请【{$invoicingTitle}】经办人由【{$oldcreatorname}】转给【{$newusername}】"
         ]);
 
         $transaction->commit();

@@ -270,57 +270,60 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
         <div >
            {
 
-            ['已取消'].includes(statusCn[basic.status]) &&
+            basic.status === FlowStateEunm.CANCEL &&
             <div style={mask}>
               <div style={{color:'black',fontSize:'40px', display:'flex', alignItems:'center', gap: 16}}>
                 <span>{statusCn[basic.status]}</span>
-                <span style={{color:'#1890FF',borderBottom:'2px solid #1890FF',cursor:'pointer'}} onClick={() => {
-                  Modal.confirm({
-                    title: '确定要继续审批吗？',
-                    onOk() {
-                      restartflow({thirdNo: basic.thirdNo || thirdno, agentid: AGENTID}).then((res:any) => {
-                        if (res.errorMessage) {
-                          Modal.error({ title: res.errorMessage });
-                        } else {
-                          Modal.info({ title: '操作成功！' });
-                          getflowinfo({thirdNo:basic.thirdNo || thirdno,projectid,state}).then((res:any)=>{
-                            if (res.errorMessage) {
-                              Modal.error({
-                                title: '报错',
-                                content: res.errorMessage,
-                              });
-                            } else {
-                              setBasic(res.basic)
-                              setViewdata(res.viewdata)
-                              setStatusCn(res.statusCn)
-                              setIncomecontracts(res.incomecontracts)
-                              setExpendcontracts(res.expendcontracts)
+                {
+                  (basic.thirdno || thirdno) &&
+                  <span style={{color:'#1890FF',borderBottom:'2px solid #1890FF',cursor:'pointer'}} onClick={() => {
+                    Modal.confirm({
+                      title: '确定要继续审批吗？',
+                      onOk() {
+                        restartflow({thirdNo: basic.thirdno || thirdno, agentid: AGENTID}).then((res:any) => {
+                          if (res.errorMessage) {
+                            Modal.error({ title: res.errorMessage });
+                          } else {
+                            Modal.info({ title: '操作成功！' });
+                            getflowinfo({thirdNo:basic.thirdno || thirdno,projectid,state}).then((res:any)=>{
+                              if (res.errorMessage) {
+                                Modal.error({
+                                  title: '报错',
+                                  content: res.errorMessage,
+                                });
+                              } else {
+                                setBasic(res.basic)
+                                setViewdata(res.viewdata)
+                                setStatusCn(res.statusCn)
+                                setIncomecontracts(res.incomecontracts)
+                                setExpendcontracts(res.expendcontracts)
 
-                              if (res.viewdata) {
-                                setStep(res.viewdata.step+1)
-                                var node = res.viewdata.approval[res.viewdata.step+1]
-                                var temp = false
-                                if (node && node.NodeStatus==2){
-                                  temp=true
-                                }else if (node) {
-                                  var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
-                                  if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
+                                if (res.viewdata) {
+                                  setStep(res.viewdata.step+1)
+                                  var node = res.viewdata.approval[res.viewdata.step+1]
+                                  var temp = false
+                                  if (node && node.NodeStatus==2){
+                                    temp=true
+                                  }else if (node) {
+                                    var inx = node.Items.Item.findIndex((item:any)=>item.ItemUserId==currentUser.wxuserid)
+                                    if (node.Items.Item[inx] && node.Items.Item[inx].ItemStatus==2) temp=true
+                                  }
+                                  setApprove(temp)
                                 }
-                                setApprove(temp)
+                                if (onchange) onchange(res)
                               }
-                              if (onchange) onchange(res)
-                            }
-                          });
-                        }
-                      });
-                    },
-                  });
-                }}>继续审批</span>
+                            });
+                          }
+                        });
+                      },
+                    });
+                  }}>继续审批</span>
+                }
               </div>
             </div>
            }
            {
-            !['已取消'].includes(statusCn[basic.status]) && basic.reject==1 &&
+            basic.status !== FlowStateEunm.CANCEL && basic.reject==1 &&
             <div style={mask}>
               <div style={{color:'black',fontSize:'30px'}}>
                     <span style={{marginRight:'20px',color:'cadetblue',borderBottom:'2px solid cadetblue'}} onClick={() => {
@@ -371,11 +374,11 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
                     >
                    
                       {
-                        basic?.thirdNo&&
+                        basic?.thirdno&&
                         <Descriptions.Item label="审批单号"><span style={{color:"#1890FF"}} onClick={()=>{
                                 setViewflowmodal(true)
-                                
-                            }}>{basic?.thirdNo}</span></Descriptions.Item>
+
+                            }}>{basic?.thirdno}</span></Descriptions.Item>
                       }
                       <Descriptions.Item label="项目名称">{basic.title}</Descriptions.Item>
                       <Descriptions.Item label="项目类型">{basic?.protypename}</Descriptions.Item>
@@ -468,7 +471,7 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
               <div style={{margin:'0 0 20px 20px',fontWeight:'bold'}}>{basic.offlinenote}</div>
             }
             {
-              state==-1 && 
+              (viewdata && viewdata != 0) && state==-1 &&
               <div>
                 {
                 (basic.approvalUserid||'').includes(currentUser.wxuserid) && basic.status!=FlowStateEunm.PASS  && <>

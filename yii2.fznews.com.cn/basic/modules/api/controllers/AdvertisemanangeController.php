@@ -639,7 +639,7 @@ class AdvertisemanangeController extends ApiBase{
           }
       }
 
-      // 查询角色权限
+      // 查询角色权
       $sql = "SELECT userid,dept from weixin_oa_flowrole where  userid='".$userid."' and  FIND_IN_SET(".$this->agentId.",agent)  and role in (select id from weixin_oa_role where FIND_IN_SET('$power',powername))";
       $result = WeixinOaFlowrole::findBySql($sql)->asArray()->all();
 
@@ -1231,9 +1231,9 @@ class AdvertisemanangeController extends ApiBase{
               if (!$isCurrentMonth && $isAuditor) {
                   $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
                   $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':userid' => $this->_adminInfo['id'], ':remark' => '%' . $obj['SYS_DOCUMENTID'] . '%'])->queryOne();
-                  if ($modifyResult && $modifyResult['cnt'] > 1) {
-                      return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
-                  }
+                  // if ($modifyResult && $modifyResult['cnt'] > 1) {
+                  //     return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
+                  // }
                   // 审核员修改往期广告，不允许修改金额
                   if (isset($obj['AI_AmountReceivable']) && $obj['AI_AmountReceivable'] != $existingAdvitem['AI_AmountReceivable']) {
                       return ['errorMessage' => '审核员修改往期广告不允许修改金额'];
@@ -1727,20 +1727,20 @@ class AdvertisemanangeController extends ApiBase{
                   if (!$onlyFileOrContractChanged && !$isCurrentMonth && $isAuditor) {
                       $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
                       $modifyResult = Yii::$app->db->createCommand($checkModifySql)->bindValues([':userid' => $this->_adminInfo['id'], ':remark' => '%' . $advitemId . '%'])->queryOne();
-                      if ($modifyResult && $modifyResult['cnt'] > 1) {
-                          return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
-                      }
+                      // if ($modifyResult && $modifyResult['cnt'] > 1) {
+                      //     return ['errorMessage' => '往期广告已被审核员修改过，无法再次修改'];
+                      // }
                       // 审核员修改往期广告，不允许修改金额
                       if (isset($obj['AI_AmountReceivable']) && $obj['AI_AmountReceivable'] != $existingAdvitem['AI_AmountReceivable']) {
                           return ['errorMessage' => '审核员修改往期广告不允许修改金额'];
                       }
                   }
 
-                  $obj['AI_Debt'] = max(0, $amountReceivable - ($existingAdvitem['AI_AmountReceived'] ?? 0));
+                  $obj['AI_Debt'] = $amountReceivable - ($existingAdvitem['AI_AmountReceived'] ?? 0);
                   // 计算未核销金额
-                  $obj['AI_UnbalancedMoney'] =max(0, $amountReceivable - ($existingAdvitem['AI_BalancedMoney'] ?? 0));
+                  $obj['AI_UnbalancedMoney'] = $amountReceivable - ($existingAdvitem['AI_BalancedMoney'] ?? 0);
                   // 计算未开票金额
-                  $obj['AI_UninvoicedMoney'] = max(0, $amountReceivable - ($existingAdvitem['AI_InvoicedMoney'] ?? 0));
+                  $obj['AI_UninvoicedMoney'] = $amountReceivable - ($existingAdvitem['AI_InvoicedMoney'] ?? 0);
                   $obj['SYS_LASTMODIFIED'] = $now;
                   // 只更新需要的字段，避免覆盖不需要更新的字段如fileurls
                   $updateFields = array_diff_key($obj, ['SYS_DOCUMENTID' => '']); // 排除主键字段
