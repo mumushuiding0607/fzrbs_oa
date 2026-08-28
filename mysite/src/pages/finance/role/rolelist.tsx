@@ -5,13 +5,13 @@ import {
   ProTable,
 } from '@ant-design/pro-components';
 import { Button, Modal } from 'antd';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Addrole from './addrole';
 import UserAutocomplete from '../budget/common/userAutocomplete';
 import Roleselect from './roleselect';
 import Dictselect from '../budget/dict/dictselect';
 import Addpower from './addpower';
-import { delrole, getrolelist } from './service';
+import { delrole, getrolelist, getrole, saverole } from './service';
 import AppSelect from '../Flowtemplate/AppSelect';
 
 const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
@@ -24,6 +24,27 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
 
   const [showModal,setShowModal]=useState(false)
   const [pmodal,setPmodal]=useState(false)
+
+  // 如果传入了type（角色名称），则自动过滤该角色
+  const [defaultRoleId, setDefaultRoleId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!type) return;
+
+    // 查找角色ID
+    getrole({type, agentid}).then((res: any) => {
+      const roles = Array.isArray(res) ? res : (res?.data || []);
+      const targetRole = roles.find((r: any) => r.rolename === type);
+      if (targetRole && targetRole.id) {
+        // 角色存在，设置过滤参数
+        setParams((prev: any) => ({ ...prev, role: targetRole.id }));
+        // 同时设置新增时默认选中的角色ID
+        setDefaultRoleId(targetRole.id);
+      }
+      // 角色不存在时不自动创建，静默忽略
+    });
+  }, [type]);
+
   const columns: ProFormColumnsType<any>[] = [
     {
       title: 'ID',
@@ -99,7 +120,7 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
 
     actionRef.current?.reload()
     setShowModal(false)
-  } 
+  }
   const onPowerchange = (e:any)=>{
     params.power = e
     setParams(params)
@@ -108,7 +129,7 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
   }
   const onRolechange = (e:any)=>{
 
-    
+
     params.role = e
     setParams(params)
     proTableFormRef.current?.setFieldsValue({role:e})
@@ -116,10 +137,9 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
     actionRef.current?.reload()
   }
   const onUserchange = (e:any)=>{
- 
 
     params.userid = e?e.value:''
-    actionRef.current?.reload() 
+    actionRef.current?.reload()
   }
   return (
     <>
@@ -133,24 +153,24 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
       search={false}
       columns={columns}
       request={(params, sorter, filter) => {
-        
+
         document.body.scrollTop = document.documentElement.scrollTop = 0;
-   
+
         return getrolelist(params);
       }}
       toolbar={{
 
         filter: (
           <>
-            <AppSelect style={{width:'150px'}} onChange={(value:any)=>{ 
+            <AppSelect style={{width:'150px'}} onChange={(value:any)=>{
               params.agentid = value
               setParams(params)}
             } />
             <LightFilter name='userid'><Roleselect style={{width:'150px'}} onChange={onRolechange} agentid={agentid} needAddItem={false} type={type} /></LightFilter>
             <Dictselect onChange={onPowerchange}  agentid={agentid} needAddItem={false} type="角色权限" />
             <UserAutocomplete multiple={false} onChange={onUserchange} width='150px' />
-            
-          
+
+
           </>
         ),
         actions: [
@@ -158,7 +178,7 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
             key="primary"
             type="primary"
             onClick={() => {
-              setRole({})
+              setRole(defaultRoleId ? { role: defaultRoleId } : {})
               setRefresh(++refresh)
               setShowModal(true)
             }}
@@ -175,8 +195,8 @@ const Rolelist:React.FC<{agentid?:any,type?:string}> = ({agentid,type}) => {
         </Button>,
         ],
       }}
-   
-      
+
+
     />
     <Modal
         title="角色"

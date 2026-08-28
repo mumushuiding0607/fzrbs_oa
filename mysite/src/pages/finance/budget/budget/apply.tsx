@@ -48,15 +48,19 @@ const [activeKey, setActiveKey] = useState('1');
   }
 
   const onFinish = (act:any) => {
-    
+
     viewflow({projectid:data1.id,act}).then((res:any)=>{
-      
+
       if (res.errorMessage) {
         Modal.error({
           title: '报错',
           content: res.errorMessage,
         });
       } else {
+        const flowThirdNo = res.basic?.thirdno || res.basic?.ThirdNo || thirdno;
+        if (res.basic?.thirdno) {
+          setThirdno(res.basic.thirdno);
+        }
         Modal.confirm({
           title:"请确认流程是否正确",
           bodyStyle:{marginLeft:0},
@@ -64,7 +68,7 @@ const [activeKey, setActiveKey] = useState('1');
           centered:false,
           content:(
             <div style={{marginLeft:'0!important'}}>
-              <Flow key={data1.act}  data={res.viewdata} statusCn={res.statusCn} step={res.step}></Flow>
+              <Flow key={data1.act}  data={res.viewdata} thirdNo={flowThirdNo} statusCn={res.statusCn} step={res.step}></Flow>
             </div>
           ),
           onOk:()=>{
@@ -115,6 +119,9 @@ const [activeKey, setActiveKey] = useState('1');
           content: res.errorMessage,
         });
       } else {
+        if (res.basic?.thirdno) {
+          setThirdno(res.basic.thirdno);
+        }
         setFlowdata(res)
         setModal(true)
       }
@@ -301,7 +308,7 @@ const [activeKey, setActiveKey] = useState('1');
         onCancel={() => setModal(false)}
         footer={null}
       >
-        <Flow key={refresh} data={flowdata.viewdata} statusCn={flowdata.statusCn} step={flowdata.step}></Flow>
+        <Flow key={refresh} data={flowdata.viewdata} thirdNo={thirdno} statusCn={flowdata.statusCn} step={flowdata.step}></Flow>
         <div>流程id：{flowdata.viewdata?.templateid}</div>
       </Modal>
       

@@ -58,9 +58,9 @@
          <div class="label">合同状态</div>
          <div class="value" :style="{color:data.basic?.contractids?'#1989fa':'black'}" @click="getContract(data.basic?.contractids)">{{data.basic?.contractids?'已签':'未签' }}</div>
        </div>
-       <div class="cell" v-if="paycollection">
+       <div class="cell" >
          <div class="label">合同回款</div>
-         <div class="value">{{paycollection.toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,})}}</div>
+         <div class="value">{{paycollection?paycollection.toLocaleString('en-US', {minimumFractionDigits: 2,maximumFractionDigits: 2,}):0.0}}</div>
        </div>
        <Filescard v-if="contracturls" :urls="contracturls"/>
        <div v-if="data.basic?.state<=ProjectStatesEnum.BUDGET&&data.basic?.content">
@@ -87,7 +87,7 @@
         <div class="row" style="padding: 0;">
           <Image width="30" height="30" fit="cover" style="margin-right: 10px;" :round="true" :src="item?.avatar"/>
           <div :style="{flexGrow:1}">
-            <span v-if="item.next!='offline'&&item.offline!=1">{{item.title+(item.status&&index<=step?('>'+data.statusCn[item.status]):'')}}</span>
+            <span v-if="item.next!='offline'&&item.offline!=1">{{item.title+(item.status&&index<=(step)?('>'+data.statusCn[item.status]):'')}}</span>
             <span v-if="item.next=='offline'">线下上会处理</span>
             <div><span v-if="(data.basic?.offline==1||item.offline==1)&&step==index"  @click="upload"  style="color: #1989fa">线下上会材料上传</span></div>
             <div><span :style="{color:'red'}">{{item.speech}}</span></div>

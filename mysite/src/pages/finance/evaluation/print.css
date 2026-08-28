@@ -1,0 +1,151 @@
+:root{
+  --printRowMinHeight: 50px;
+  --fontSize: 15px;
+}
+
+/* 打印标题 */
+.print-title {
+  text-align: center;
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+/* 打印表格 */
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.print-table th,
+.print-table td {
+  border: 1px solid #333;
+  padding: 8px 4px;
+  vertical-align: top;
+}
+
+.print-table th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+  height: 67px;
+}
+
+/* 非第一列的表头 - 居中 */
+.print-table th:not(.scorer-cell) {
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* 评分人列 - 居中 */
+.scorer-cell {
+  width: 80px;
+  height: 67px;
+  text-align: center;
+}
+
+/* 分数列 - 居中 */
+.print-table td:not(.dept-opinion-cell):not(.personal-opinion-cell):not(.scorer-cell) {
+  text-align: center;
+}
+
+/* 表头第一格 - 对角线分隔样式 */
+.header-cell-split {
+  position: relative;
+  width: 100%;
+  height: 67px;
+}
+
+.header-cell-split .corner-text-top {
+  position: absolute;
+  top: -2px;
+  right: 2px;
+  z-index: 2;
+  font-size: 11px;
+}
+
+.header-cell-split .corner-text-bottom {
+  position: absolute;
+  bottom: -2px;
+  left: 2px;
+  z-index: 2;
+  font-size: 11px;
+}
+
+.header-cell-split svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.header-cell-split svg line {
+  stroke: #333;
+  stroke-width: 1.5px;
+}
+
+/* 部门意见列 */
+.dept-opinion-cell {
+  width: 150px;
+  white-space: pre-wrap;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* 个人意见列 */
+.personal-opinion-cell {
+  width: 150px;
+  white-space: pre-wrap;
+  text-align: left;
+  vertical-align: top;
+}
+
+/* 打印底部 */
+.print-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+  font-size: 15px;
+}
+
+/* 预览弹窗内样式 */
+.print-preview {
+  padding: 10px;
+}
+
+/* 打印样式 */
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  .print-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  .header, .footer {
+    display: none;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}

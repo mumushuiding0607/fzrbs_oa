@@ -15,7 +15,7 @@
         <Budgetdetail :id="par.projectid" :showTab="true" show="final" />
       </Tab>
       <Tab  v-if="project.state>ProjectStatesEnum.FINAL" title="决算审批">
-        <Viewflow :projectid="par.projectid"  :state="ProjectStatesEnum.FINAL"/>
+        <Viewflow :projectid="par.projectid"  :state="ProjectStatesEnum.FINAL" :paycollection="project?.data?.paycollection"/>
       </Tab>
       <Tab v-if="project.budgetreport" title="预算报告">
         <NoticeBar
@@ -27,7 +27,7 @@
         <Budgetdetail :id="par.projectid" :showTab="true" show="budget" />
       </Tab>
       <Tab  title="预算审批" v-if="project.state>ProjectStatesEnum.BUDGET">
-        <Viewflow :projectid="par.projectid"  :state="ProjectStatesEnum.BUDGET"/>
+        <Viewflow :projectid="par.projectid"  :state="ProjectStatesEnum.BUDGET" :paycollection="project?.data?.paycollection"/>
       </Tab>
 
     </Tabs>

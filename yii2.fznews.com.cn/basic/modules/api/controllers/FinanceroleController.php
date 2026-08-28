@@ -283,14 +283,19 @@ class FinanceroleController extends ApiBase{
         'and',
         ['>', 'id', 0],
     ];
-    
+
+    // 按角色名称精确过滤
+    if ($type) {
+        $where[] = ['=', 'rolename', $type];
+    }
+
     // if ($agentid){
     //   $where[]=new Expression("FIND_IN_SET($agentid,agentid)");
     // } else if ($type){
     //   $where[]=['=','type',$type];
     // }
     $res = WeixinOaRole::find()->where($where)->asArray()->all();
-    return $res; 
+    return $res;
   }
   private function hasRole($rolename,$dept){
     if($this->_adminInfo['usertype']==1) return true;
@@ -965,28 +970,29 @@ class FinanceroleController extends ApiBase{
 
     $wfp = new WorkflowParse();
     try {
-      switch ($agentid) {
-        case 1000063:
-          $temp = WeixinFlowApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
-          break;
-        case 1000065:
-          $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
-          break;
+      // switch ($agentid) {
+      //   case 1000063:
+      //     $temp = WeixinFlowApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+      //     break;
+      //   case 1000065:
+      //     $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+      //     break;
         
-        default:
-          $temp = WeixinOaApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
-          break;
-      }
+      //   default:
+      //     $temp = WeixinOaApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+      //     break;
+      // }
       
-      if (!$temp){
-        $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
-        if (!$temp) return array('errorMessage'=>'无此单号');
+      // if (!$temp){
+      //   $temp = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->all();
+      //   if (!$temp) return array('errorMessage'=>'无此单号');
         
-      }
-      if (sizeof($temp)>1){
-        return array('errorMessage'=>'单号重复');
-      }
-      $agentid = $temp[0]['agentid'];
+      // }
+      // if (sizeof($temp)>1){
+      //   return array('errorMessage'=>'单号重复');
+      // }
+      // $agentid = $temp[0]['agentid'];
+   
       $wfp = new WorkflowParse($agentid);
       $viewdata = $wfp->flowViewdata($thirdNo);
 
@@ -995,7 +1001,7 @@ class FinanceroleController extends ApiBase{
       return array('errorMessage'=> $th->getMessage());
     }
     
-    return array('viewdata'=>$viewdata,'statusCn'=>$this->statusCn,'thirdNo'=>$thirdNo,'agentid'=>$agentid);
+    return array('viewdata'=>$viewdata,'statusCn'=>$this->statusCn,'thirdNo'=>$thirdNo,'agentid'=>$agentid,'FLAG'=>2);
 
   }
 
@@ -1388,14 +1394,12 @@ class FinanceroleController extends ApiBase{
 
       // 检查流程是否已完成
       $flowdata = json_decode($flow['data'], true);
-      if ($flow['status'] == 2 || $flowdata['data']['OpenSpstatus'] == 2) {
-        return array('errorMessage' => '审批流程已完成，禁止修改附件');
-      }
+     
 
-      // 检查是否为发起人
+      // 检查是否为发起人或管理员
       $applyUserId = $flowdata['data']['ApplyUserId'];
-      if ($applyUserId != $this->userinfo['userid']) {
-        return array('errorMessage' => '只有流程发起人才能更新附件');
+      if ($applyUserId != $this->userinfo['userid'] && $this->_adminInfo['usertype'] != 1) {
+        return array('errorMessage' => '只有流程发起人或管理员才能更新附件');
       }
 
       $node = &$flowdata['data']['ApprovalNodes']['ApprovalNode'][$step];
@@ -1409,9 +1413,20 @@ class FinanceroleController extends ApiBase{
 
       // 更新 fileurls
       $node['fileurls'] = $fileurls;
-
+      
       $flow->data = json_encode($flowdata);
-      $flow->save();
+      $saveResult = $flow->save();
+      if (!$saveResult) {
+        return array('errorMessage' => '保存失败: ' . json_encode($flow->getErrors()));
+      }
+
+      // 确认保存成功 - 用原生SQL查询确认
+      $check = Yii::$app->db->createCommand("SELECT data FROM weixin_oa_approvaldata WHERE thirdNo='{$thirdNo}'")->queryOne();
+      $savedData = json_decode($check['data'], true);
+      $savedFileurls = $savedData['data']['ApprovalNodes']['ApprovalNode'][$step]['fileurls'] ?? '';
+      if ($savedFileurls !== $fileurls) {
+        return array('errorMessage' => '确认保存失败：期望: ' . $fileurls . ' 实际: ' . $savedFileurls);
+      }
 
       // 记录操作日志
       $this->_operationlog([

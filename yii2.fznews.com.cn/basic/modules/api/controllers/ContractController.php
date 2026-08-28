@@ -263,7 +263,7 @@ class ContractController extends ApiBase{
     FzrbsContract::updateAll(['state'=>$state],['id'=>$id]);
     $this->_operationlog([
       'catalog' => $state == 0 ? '合同解档' : '合同存档',
-      'remark' => '合同【' . $old['serial'] . '】名称【' . $old['title'] . '】' . ($state == 0 ? '解档' : '存档（state=1）')
+      'remark' => '[contractID:' . $id . '] 合同【' . $old['serial'] . '】名称【' . $old['title'] . '】' . ($state == 0 ? '解档' : '存档（state=1）')
     ]);
     return true;
   }
@@ -288,7 +288,7 @@ class ContractController extends ApiBase{
     $old->save();
     $this->_operationlog([
       'catalog' => '合同作废',
-      'remark' => '作废合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
+      'remark' => '[contractID:' . $old->id . '] 作废合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
     ]);
     return true;
   }
@@ -451,14 +451,16 @@ class ContractController extends ApiBase{
         $obj['id']=$c->id;
         $logdata = $obj;
         if($createMirror){
-          
+
           $this->createMirror($obj);
         }
+        // 通知创建人 (4参数)
+        $this->send($obj['creator'], '您创建了合同【' . $obj['title'] . '】', ['title' => $obj['title'], 'serial' => $obj['serial']], 1);
       }
       $this->savelog($obj['id'],$action,$logdata);
       $this->_operationlog([
         'catalog' => $action == 'update' ? '修改合同' : '新增合同',
-        'remark' => ($action == 'update' ? '修改' : '新增') . '合同【' . $obj['serial'] . '】名称【' . $obj['title'] . '】金额【' . $obj['amount'] . '】对方【' . ($obj['partbname'] ?? '') . '】'
+        'remark' => '[contractID:' . $obj['id'] . '] ' . ($action == 'update' ? '修改' : '新增') . '合同【' . $obj['serial'] . '】名称【' . $obj['title'] . '】金额【' . $obj['amount'] . '】对方【' . ($obj['partbname'] ?? '') . '】创建人【' . ($obj['creatorname'] ?? '') . '】'
       ]);
     } catch (\Throwable $th) {
   
@@ -570,7 +572,7 @@ class ContractController extends ApiBase{
 
     $this->_operationlog([
       'catalog' => '删除台账',
-      'remark' => '删除合同【' . ($old['serial'] ?? '') . '】台账 ID【' . $id . '】'
+      'remark' => '[contractID:' . $old->contractid . '] 删除合同【' . ($old->serial ?? '') . '】台账 ID【' . $id . '】'
     ]);
 
     return array('data'=>'删除成功');
@@ -606,7 +608,7 @@ class ContractController extends ApiBase{
     }
     $this->_operationlog([
       'catalog' => '合同删除',
-      'remark' => '删除合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
+      'remark' => '[contractID:' . $old->id . '] 删除合同【' . $old['serial'] . '】名称【' . $old['title'] . '】金额【' . $old['amount'] . '】'
     ]);
     $transaction->commit();
 
@@ -824,9 +826,11 @@ class ContractController extends ApiBase{
     }
    
     $transaction->commit();
+    $contractid = $obj['contractid'] ?? ($obj['id'] ? FzrbsContractLedger::findOne($obj['id'])->contractid : '');
+    $contractSerial = $contractid ? (FzrbsContract::findOne($contractid)->serial ?? '') : '';
     $this->_operationlog([
       'catalog' => $obj['id'] ? '修改台账' : '新增台账',
-      'remark' => '合同【' . ($c['serial'] ?? '') . '】' . ($obj['id'] ? '修改' : '新增') . '台账：金额【' . ($obj['amount'] ?? '') . '】'
+      'remark' => '[contractID:' . $contractid . '] 合同【' . $contractSerial . '】' . ($obj['id'] ? '修改' : '新增') . '台账：金额【' . ($obj['amount'] ?? '') . '】'
     ]);
     $resp['data'] =$obj;
     return $resp;
@@ -1305,7 +1309,7 @@ class ContractController extends ApiBase{
       FzrbsContract::updateAll(['paycollection'=>$paycollection],['id'=>$c['id']]);
       $this->_operationlog([
         'catalog' => $obj['id'] ? '修改回款' : '新增回款',
-        'remark' => '合同【' . $c['serial'] . '】' . ($obj['id'] ? '修改' : '新增') . '回款：金额【' . $obj['amount'] . '】，累计【' . $paycollection . '】'
+        'remark' => '[contractID:' . $c->id . '] 合同【' . $c['serial'] . '】' . ($obj['id'] ? '修改' : '新增') . '回款：金额【' . $obj['amount'] . '】，累计【' . $paycollection . '】'
       ]);
     } catch (\Throwable $th) {
       $transaction->rollBack();
@@ -1474,7 +1478,7 @@ public function actionSaveinvoice(){
 
         $this->_operationlog([
           'catalog' => $temp ? '发票关联合同' : '新增发票',
-          'remark' => '合同【' . $c['serial'] . '】' . ($temp ? '关联发票：' : '开票：') . '发票号【' . $invoice['number'] . '】金额【' . $invoice['amount'] . '】'
+          'remark' => '[contractID:' . $c->id . '] 合同【' . $c['serial'] . '】' . ($temp ? '关联发票：' : '开票：') . '发票号【' . $invoice['number'] . '】金额【' . $invoice['amount'] . '】'
         ]);
 
     } catch (\Throwable $th) {
@@ -1894,7 +1898,7 @@ public function actionSaveinvoice(){
 
       $this->_operationlog([
         'catalog' => '合同审批通过',
-        'remark' => '合同【' . ($d['serial'] ?? $d['contractid'] ?? '') . '】审批通过'
+        'remark' => '[contractID:' . $d->contractid . '] 合同【' . ($d['serial'] ?? '') . '】审批通过'
       ]);
 
     } catch (\Throwable $th) {
@@ -1920,9 +1924,10 @@ public function actionSaveinvoice(){
       $wfp->updateAfterFlowChange($ret,$userid,$status,$postdatas,$transaction);
    
       FzrbsContractDebturge::updateAll(['thirdNo'=>'','dealresult'=>'','dealresultname'=>'','dealresultnote'=>''],['thirdNo'=>$postdatas['thirdNo']]);
+      $debturge = FzrbsContractDebturge::find()->where(['thirdNo'=>$postdatas['thirdNo']])->one();
       $this->_operationlog([
         'catalog' => '合同审批驳回',
-        'remark' => '合同【' . ($postdatas['serial'] ?? $postdatas['contractid'] ?? $postdatas['thirdNo'] ?? '') . '】审批驳回'
+        'remark' => '[contractID:' . ($debturge->contractid ?? '') . '] 合同【' . ($postdatas['serial'] ?? '') . '】审批驳回'
       ]);
     } catch (\Throwable $th) {
       $transaction->rollBack();
@@ -1944,10 +1949,10 @@ public function actionSaveinvoice(){
         $ret = $wfp->changeFlow($userid,$status,$postdatas);
         $wfp->updateAfterFlowChange($ret,$userid,$status,$postdatas,$transaction);
         FzrbsContractDebturge::updateAll(['thirdNo'=>'','dealresult'=>'','dealresultname'=>'','dealresultnote'=>''],['thirdNo'=>$postdatas['thirdNo']]);
-
+        $debturge = FzrbsContractDebturge::find()->where(['thirdNo'=>$postdatas['thirdNo']])->one();
         $this->_operationlog([
           'catalog' => '合同审批撤销',
-          'remark' => '合同【' . ($postdatas['serial'] ?? $postdatas['contractid'] ?? $postdatas['thirdNo'] ?? '') . '】审批撤销'
+          'remark' => '[contractID:' . ($debturge->contractid ?? '') . '] 合同【' . ($postdatas['serial'] ?? '') . '】审批撤销'
         ]);
 
       } catch (\Throwable $th) {
@@ -2231,7 +2236,7 @@ public function actionSaveinvoice(){
         FzrbsContract::updateAll($obj,['id'=>$obj['id']]);
         $this->_operationlog([
           'catalog' => '修改合同负责人',
-          'remark' => '合同【' . ($old['serial'] ?? '') . '】负责人由【' . ($old['charger'] ?? '') . '】改为【' . ($obj['charger'] ?? '') . '】'
+          'remark' => '[contractID:' . $obj['id'] . '] 合同【' . ($old['serial'] ?? '') . '】负责人由【' . ($old['charger'] ?? '') . '】改为【' . ($obj['charger'] ?? '') . '】'
         ]);
       }else{
         

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat)",
+      "Bash(cat ~/.claude/handoffs/extracted1.md ~/.claude/handoffs/extracted2.md)"
+    ]
+  }
+}

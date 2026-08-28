@@ -12,7 +12,7 @@ import { getusers } from '../invoice';
     components: {
       ActionSheet,Field,Cell
     },
-    props: ['id','show'],
+    props: ['id','show', 'deptId'],
     data () {
       return {
         visible:false,
@@ -27,7 +27,10 @@ import { getusers } from '../invoice';
       visible(val){
         this.$emit('update:show',val)
       },
-      
+      deptId(){
+        this.onSearch('')
+      },
+
     },
     mounted() {
       this.onSearch('')
@@ -37,7 +40,7 @@ import { getusers } from '../invoice';
     },
     methods:{
       onSelected(val:any){
-        
+
         if (val){
           this.$emit('update:value',{name:val.name,userid:val.userid,avatar:val.avatar,mobile:val.mobile})
         this.visible=false
@@ -45,16 +48,16 @@ import { getusers } from '../invoice';
       },
       // 搜索方法
       async onSearch (query:any) {
-    
+
         query=query.trim()
 
         try {
-          getusers({keyword:query}).then((res:any)=>{
-            
+          getusers({keyword:query, dept_id: this.deptId || undefined}).then((res:any)=>{
+
             this.options = res||[]
           })
-    
-          
+
+
         } catch (error) {
           console.error('远程搜索失败:', error);
         }

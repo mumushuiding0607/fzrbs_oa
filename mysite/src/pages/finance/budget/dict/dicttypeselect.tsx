@@ -8,29 +8,30 @@ const Dicttypeselect:React.FC<{type?:string,value?:any,onChange?:any, onSelect?:
   const [name, setName] = useState('');
   const inputRef = useRef<InputRef>(null);
   useEffect( ()=>{
-    getdicttypes({keyword:type}).then((res)=>{
-
-      if (res) {
-        res.map((e)=>{
+    getdicttypes({keyword:type}).then((res: any)=>{
+      // umi request 可能返回 {data: [...]} 或直接是数组
+      const list = res?.data || res || [];
+      if (list && Array.isArray(list)) {
+        const mapped = list.map((e: any)=>{
           e.label = e.type
           if (!e.value && e.value!=0) e.value = e.type
           return e
         })
-   
-
+        setOptions(mapped)
+      } else {
+        setOptions([])
       }
-      console.log(res)
-      setOptions(res)
+      console.log('getdicttypes result:', res)
     })
-    
-  },[])
 
-  const handleSelect = (e:any)=>{
-    
-    const indx = options.findIndex((x:any)=>x.value==e)
- 
-    onChange(e,options[indx].label)
-  }
+  },[type])
+
+  const handleChange = (e: any) => {
+    const selectedOption = options.find((x: any) => x.value === e);
+    if (selectedOption) {
+      onChange?.(e, selectedOption.label);
+    }
+  };
 
 
   return (
@@ -43,7 +44,8 @@ const Dicttypeselect:React.FC<{type?:string,value?:any,onChange?:any, onSelect?:
             placeholder={type}
             optionFilterProp="children"
             options={options}
-            value={value}  onSelect={handleSelect}
+            value={value}
+            onChange={handleChange}
           />
 
     </div>

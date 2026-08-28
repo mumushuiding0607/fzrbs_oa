@@ -105,11 +105,16 @@ class ApiBase extends ActiveController
         //     $adminModel = Tools::checkUserStatus('13805098818');
         //     $this->_adminInfo = $adminModel->attributes;
         // }
+
+        // if ($this->_adminInfo['id'] == 9) {
+        //     $adminModel = Tools::checkUserStatus('13665031760');
+        //     $this->_adminInfo = $adminModel->attributes;
+        // }
         if (isset($this->_adminInfo['token'])) {
             $result['token'] = $this->_adminInfo['token'];
         }
         $this->_userAccessScope();
-        $excludeControllers = ['ueditor', 'common', 'budget', 'contract', 'financerole', 'company', 'invoicing', 'qyfinance', 'qypress', 'qyuseseal', 'photodispatch', 'attendance', 'manuscriptscoring','advertisemanange'];
+        $excludeControllers = ['ueditor', 'common', 'budget', 'contract', 'financerole', 'company', 'invoicing', 'qyfinance', 'qypress', 'qyuseseal', 'photodispatch', 'attendance', 'manuscriptscoring','advertisemanange','evaluation'];
         $this->_headers = Yii::$app->request->getHeaders();
         if ($this->_adminInfo['usertype'] == 0) {
             if (!in_array($controllerId, $excludeControllers) && !in_array($this->_headers['pathName'], $this->_routePaths)) {

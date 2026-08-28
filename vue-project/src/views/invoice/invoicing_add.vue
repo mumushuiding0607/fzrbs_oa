@@ -238,9 +238,6 @@ import Businesstype_Popup from './components/Businesstype_Popup.vue';
         if(!customer){
           err = '客户信息不能为空'
         }
-        if (!customer.code){
-          err = '客户信用代码不能为空'
-        }
         if (this.data.type==1){
           if (!customer.address){
             err = '专票，客户公司地址不能为空'

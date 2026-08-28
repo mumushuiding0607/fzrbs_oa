@@ -1,6 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { ProTable } from '@ant-design/pro-components';
+import dayjs from 'dayjs';
 
 const OperationLog: React.FC<{
   api: (params: { bizId: any; current?: number; pageSize?: number }) => Promise<any>;
@@ -34,7 +35,20 @@ const columns: ProColumns[] = [
     title: '时间',
     dataIndex: 'inserttime',
     key: 'inserttime',
-    width: 160,
+    width: 180,
+    render: (text: number | string) => {
+      if (!text) return '';
+      // 如果是 Unix 时间戳（10位数字），转换为日期格式
+      const num = Number(text);
+      if (!isNaN(num) && String(num).length === 10) {
+        return dayjs.unix(num).format('YYYY-MM-DD HH:mm:ss');
+      }
+      // 如果已经是格式化日期字符串，直接返回
+      if (typeof text === 'string') {
+        return text;
+      }
+      return String(text);
+    },
   },
   {
     title: '操作人',

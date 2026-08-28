@@ -186,6 +186,12 @@
         name: '摄影派工',
         component: './administration/PhotographyDispatch',
       },
+      {
+        path: '/administration/evaluation/',
+        name: '考评系统',
+        component: './finance/evaluation/index',
+        access: 'canOpen',
+      },
 
       {
         component: './404',

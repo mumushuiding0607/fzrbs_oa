@@ -15,25 +15,5 @@ class FzrbsBudgetDict extends \yii\db\ActiveRecord
         return 'fzrbs_budget_dict';
     }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function rules()
-    {
-        return [
-            [['type','value'], 'string', 'max' => 80],
-        ];
-    }
 
-    /**
-     * {@inheritdoc}
-     */
-    public function attributeLabels()
-    {
-        return [
-            'id' => 'ID',
-            'type' => 'Type',
-            'value' => 'Value'
-        ];
-    }
 }

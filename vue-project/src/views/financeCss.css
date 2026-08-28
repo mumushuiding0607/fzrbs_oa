@@ -63,6 +63,16 @@
     text-align: left;
     word-wrap: break-word;
 }
+.van-radio__label{
+  flex: none;
+  box-sizing: border-box;
+  width: calc(var(--van-field-label-width)*0.9)!important;
+  margin-right: 0;
+  color: var(--van-field-label-color);
+  text-align: left;
+  word-wrap: break-word;
+  font-size: calc(var(--van-cell-font-size))!important;
+}
 
   /* listitem 样式 */
 .listrow{
@@ -172,13 +182,22 @@
   .cell .value{
     position: relative;
     overflow: hidden;
-    color: #323233;
+    color: #334155;
     text-align: left;
     vertical-align: middle;
     word-wrap: break-word;
   }
   .van-cell .van-cell__title span{
-    font-size: calc(var(--van-cell-font-size)*0.8*var(--Big))!important;
+    font-size: calc(var(--van-cell-font-size)*var(--Big))!important;
+  }
+  .van-cell .van-cell__title .van-tag,
+  .van-cell .van-cell__title span.van-tag{
+    font-size: calc(var(--van-cell-font-size)) !important;
+  }
+
+  /* nav-bar */
+  .van-nav-bar__title {
+    font-size: calc(var(--van-cell-font-size) * var(--Big)) !important;
   }
 
   /* flow steps */

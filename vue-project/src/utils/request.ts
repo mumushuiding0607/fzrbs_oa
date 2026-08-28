@@ -32,4 +32,7 @@ export const request = async (url: string, data: any, method: string, showLoadin
     if (method == 'post') {
         return instance.post(url, requestData, requestConfig)
     }
+    if (method == 'get') {
+        return instance.get(url, { params: data })
+    }
 }

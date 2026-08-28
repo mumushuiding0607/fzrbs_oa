@@ -5,6 +5,7 @@ use Yii;
 use app\modules\api\commons\ApiBase;
 use app\modules\api\commons\WorkflowParse;
 use app\modules\api\commons\WxQyhJk;
+use app\modules\api\commons\ApprovalHelper;
 use app\modules\api\models\FzrbsBudgetBalance;
 use app\modules\api\models\FzrbsBudgetDict;
 use app\modules\api\models\FzrbsBudgetHistory;
@@ -785,6 +786,8 @@ class InvoicingController extends ApiBase{
             'catalog' => '新增开票申请',
             'remark' => "[invoicingID:{$c->id}] 新增开票申请【{$c->title}】金额【{$c->amount}】创建人【{$this->userinfo['name']}】"
         ]);
+        // 通知创建人
+        $this->send($c->creator, '您创建了开票申请【' . ($c->title ?? '') . '】', $c);
 
         if ($invoicers){
           $userids = implode('|',array_column($invoicers,'userid'));
@@ -1403,18 +1406,22 @@ class InvoicingController extends ApiBase{
    * id,name,addr,tel,bankname,bankaccount
    */
   private function updateCompany($infoFromInvoice){
-    // 先根据id查询
-    // $company = FzrbsCompany::findOne(['code'=>$infoFromInvoice['id']]);
-    // if (!$company){
-    //   // 再根据公司名称查询
-    //   $company = FzrbsCompany::findOne(['company'=>$infoFromInvoice['name']]);
-    // }
-    $company = FzrbsCompany::findOne(['company'=>$infoFromInvoice['name']]);
+
+    $company = null;
+    // 优先用 code 查找，找不到再用公司名称
+    if (!empty($infoFromInvoice['id'])) {
+      $company = FzrbsCompany::findOne(['code'=>$infoFromInvoice['id']]);
+    }
+    if (!$company && !empty($infoFromInvoice['name'])) {
+      $company = FzrbsCompany::findOne(['company'=>$infoFromInvoice['name']]);
+    }
     if (!$company){
       // 找不到就新建
       $company = new FzrbsCompany();
     }
-    $company->code = $infoFromInvoice['id'];
+    if (!empty($infoFromInvoice['id'])) {
+      $company->code = $infoFromInvoice['id'];
+    }
     $company->company = $infoFromInvoice['name'];
     $company->address = $infoFromInvoice['addr'];
     // 判断联系人是否为空，如果不为，那么在最前面插入
@@ -1433,17 +1440,21 @@ class InvoicingController extends ApiBase{
       $company->bankaccount = $bankname.' '.$bankaccount;
     }
     $company->save();
-   
-    
+
+
   }
   private function refreshCompanyinfoFromInvoice($invoice){
 
-    if ($invoice['SellerIdNum']){
-      
+    if (!empty($invoice['SellerIdNum'])){
+
       $this->updateCompany(array('id'=>$invoice['SellerIdNum'],'name'=>$invoice['SellerName'],'addr'=>$invoice['SellerAddr'],'tel'=>$invoice['SellerTelNum'],'bankname'=>$invoice['SellerBankName'],'bankaccount'=>$invoice['SellerBankAccNum']));
+    } elseif (!empty($invoice['SellerName'])) {
+      $this->updateCompany(array('id'=>null,'name'=>$invoice['SellerName'],'addr'=>$invoice['SellerAddr'],'tel'=>$invoice['SellerTelNum'],'bankname'=>$invoice['SellerBankName'],'bankaccount'=>$invoice['SellerBankAccNum']));
     }
-    if ($invoice['BuyerIdNum']){
+    if (!empty($invoice['BuyerIdNum'])){
       $this->updateCompany(array('id'=>$invoice['BuyerIdNum'],'name'=>$invoice['BuyerName'],'addr'=>$invoice['BuyerAddr'],'tel'=>$invoice['BuyerTelNum'],'bankname'=>$invoice['BuyerBankName'],'bankaccount'=>$invoice['BuyerBankAccNum']));
+    } elseif (!empty($invoice['BuyerName'])) {
+      $this->updateCompany(array('id'=>null,'name'=>$invoice['BuyerName'],'addr'=>$invoice['BuyerAddr'],'tel'=>$invoice['BuyerTelNum'],'bankname'=>$invoice['BuyerBankName'],'bankaccount'=>$invoice['BuyerBankAccNum']));
     }
 
   }
@@ -2438,11 +2449,17 @@ public function actionReject(){//驳回
   if ($data['reject']==1){
     return array('errorMessage'=>'已驳回，不要重复操作');
   }
-  // 是否是当前审批人
-  if ($data['approvalUserid'] && !in_array($userid,explode('|',$data['approvalUserid']))){
-    return array('errorMessage'=>'当前审批人是：'.$data['approvalUsername']);
+  $check = ApprovalHelper::validateApproval(
+    $postdatas['thirdNo'],
+    $userid,
+    $this->agentId,
+    $data['approvalUserid'],
+    $data['approvalUsername']
+  );
+  if (!$check['pass']) {
+    return array('errorMessage'=>$check['errorMessage']);
   }
-  
+
   $transaction = Yii::$app->getDb()->beginTransaction();
   try {
     
@@ -2997,11 +3014,17 @@ public function actionStartflow(){
     if ($data['reject']==1){
       return array('errorMessage'=>'当前流程处于驳回状态，等经办重新提交后才能审批');
     }
-    // 是否是当前审批人
-    if ($data['approvalUserid'] && !in_array($userid,explode('|',$data['approvalUserid']))){
-      return array('errorMessage'=>'当前审批人是：'.$data['approvalUsername']);
+    $check = ApprovalHelper::validateApproval(
+      $postdatas['thirdNo'],
+      $userid,
+      $this->agentId,
+      $data['approvalUserid'],
+      $data['approvalUsername']
+    );
+    if (!$check['pass']) {
+      return array('errorMessage'=>$check['errorMessage']);
     }
-    
+
     $status = 2;
 
     try {
@@ -3447,7 +3470,11 @@ public function actionStartflow(){
       return array('errorMessage'=>'发票为空');
     }
     // 查询客户的邮箱；
-    $customer = FzrbsCompany::find()->where(['code'=>$invoice->BuyerIdNum])->one();
+    if ($invoice->BuyerIdNum) {
+      $customer = FzrbsCompany::find()->where(['code'=>$invoice->BuyerIdNum])->one();
+    } else {
+      $customer = FzrbsCompany::find()->where(['company'=>$invoice->BuyerName])->one();
+    }
     if (!$customer->email){
       return array('errorMessage'=>'客户邮箱为空，无法发送，请先设置客户邮箱');
     }
@@ -3774,14 +3801,8 @@ public function actionStartflow(){
         'and',
         ['>', 'p.id', 0],
     ];
-    // 判断用户是否有查看权限
-    $dept = [];
-    $dept = $this->getDepts();
-    if (sizeof($dept)){
-      $where[] = ['or',['in' , 'p.departmentid' , $dept],['=','p.creator',$userid]];
-    }else {
-      $where[] = ['or',['=','p.creator',$userid],['=','p.charger',$userid]];
-    }
+  
+   
 
     if ($this->_request['keyword']) {
       $where[] = ['or',['in','id',explode(',',$this->_request['keyword'])],['LIKE', 'p.title', $this->_request['keyword']],['LIKE', 'p.serial', $this->_request['keyword']]];
@@ -3795,11 +3816,21 @@ public function actionStartflow(){
     return $res;
   }
   public function actionGetusers(){
-    
+
     $keyword = $this->_request['keyword'];
-    $where = ['and',['>','id',0]];
+    $deptId = $this->_request['dept_id'];
+    $where = ['and',['>','id',0],['=','status',1],['=','st',1]];
     if ($keyword) {
       $where[]=['or',['like','name',$keyword],['=','userid',$keyword]];
+    }
+    if ($deptId) {
+      // 查询指定部门及其子部门
+      $deptIds = [$deptId];
+      $childDepts = WeixinOaDepartment::find()->where(['parentid' => $deptId])->select('id')->column();
+      if ($childDepts) {
+        $deptIds = array_merge($deptIds, $childDepts);
+      }
+      $where[]=['in','departmentid',$deptIds];
     }
     $limit = $this->_request['limit'];
     if(!$limit) $limit = 20;

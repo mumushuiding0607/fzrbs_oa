@@ -5,6 +5,7 @@ use Yii;
 use app\modules\api\commons\ApiBase;
 use app\modules\api\commons\WorkflowParse;
 use app\modules\api\commons\WxQyhJk;
+use app\modules\api\commons\ApprovalHelper;
 use app\modules\api\models\FzrbsCompany;
 use app\modules\api\models\WeixinAttendanceTemplate;
 use app\modules\api\models\WeixinOaApprovaldata;
@@ -99,11 +100,17 @@ class AttendanceController extends ApiBase{
     if (!$postdatas['thirdNo']) return array('errorMessage'=>'thirdNo为空');
     $data = WeixinAttendanceInfo::find()->where(['and',['=','thirdNo',$postdatas['thirdNo']]])->asArray()->one();
 
-    // 是否是当前审批人
-    if ($data['approvalUserid'] && !in_array($userid,explode('|',$data['approvalUserid']))){
-      return array('errorMessage'=>'当前审批人是：'.$data['approvalUsername']);
+    $check = ApprovalHelper::validateApproval(
+      $postdatas['thirdNo'],
+      $userid,
+      $this->agentId,
+      $data['approvalUserid'],
+      $data['approvalUsername']
+    );
+    if (!$check['pass']) {
+      return array('errorMessage'=>$check['errorMessage']);
     }
-    
+
     $status = 2;
 
     try {

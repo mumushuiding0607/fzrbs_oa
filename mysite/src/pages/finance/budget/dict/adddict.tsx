@@ -88,7 +88,7 @@ useEffect(() => {
           <Input />
         </Form.Item>
         <Form.Item label="部门" name="dept" rules={[{ required: false, message: '请选择部门!' }]}>
-          <DepartmentTreeSelect defaultValue={data.dept} onChange={deptOnChange}/>
+          <DepartmentTreeSelect defaultValue={data.dept} onChange={deptOnChange} showTreeCheckStrictly />
         </Form.Item>
         <div style={row}>
 

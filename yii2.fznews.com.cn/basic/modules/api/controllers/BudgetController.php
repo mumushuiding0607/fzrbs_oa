@@ -35,6 +35,7 @@ use app\modules\api\models\WxDepartment;
 use app\modules\weixin\commons\Uploader;
 use app\modules\weixin\Weixin;
 use app\modules\api\commons\WxQyhJk;
+use app\modules\api\commons\ApprovalHelper;
 use app\modules\api\models\FzrbsContractPaycondition;
 use app\modules\api\models\FzrbsOperationLog;
 use app\modules\api\models\WeixinFinanceCompany;
@@ -667,9 +668,16 @@ class BudgetController extends ApiBase{
     if ($data['reject']==1){
       return array('errorMessage'=>'当前流程处于驳回状态，等经办重新提交后才能审批');
     }
-    // 是否是当前审批人
-    if ($data['approvalUserid'] && !in_array($userid,explode('|',$data['approvalUserid']))){
-      return array('errorMessage'=>'当前审批人是：'.$data['approvalUsername']);
+    // 是否是当前审批人（幂等 + 审批人身份双重校验）
+    $check = ApprovalHelper::validateApproval(
+      $postdatas['thirdNo'],
+      $userid,
+      $this->agentId,
+      $data['approvalUserid'],
+      $data['approvalUsername']
+    );
+    if (!$check['pass']) {
+      return array('errorMessage'=>$check['errorMessage']);
     }
     
     $status = 2;
@@ -1605,6 +1613,8 @@ class BudgetController extends ApiBase{
             'catalog' => '新增项目',
             'remark' => "[budgetID:{$p->id}] 新增项目【{$obj['title']}】创建人【{$this->userinfo['name']}】"
         ]);
+        // 通知创建人
+        $this->send($userid, '您创建了项目【' . $obj['title'] . '】', $p);
       }
 
       
@@ -5598,6 +5608,30 @@ public function actionGetuserbyrole(){
         $result = WeixinOaFlowrole::findBySql($sql)->asArray()->all();
         return !empty($result);
     }
+
+    /**
+     * 校验考评管理员权限（字典操作专用）
+     * 只有"考评管理员"角色的用户才能操作"被考评部门"和"评分档次"
+     */
+    private function _checkEvaluationAdmin()
+    {
+        $userid = $this->_adminInfo['wxuserid'] ?? null;
+        if (!$userid) return ['errorMessage' => '无法获取用户信息'];
+
+        // 管理员直接通过
+        if ($this->_adminInfo['usertype'] != 0) {
+            return null;
+        }
+
+        $role = WeixinOaRole::find()->where(['rolename' => '考评管理员'])->select('id')->scalar();
+        if (!$role) return ['errorMessage' => '系统中不存在"考评管理员"角色，请联系管理员'];
+
+        $hasRole = WeixinOaFlowrole::find()->where(['role' => $role, 'userid' => $userid])->exists();
+        if (!$hasRole) return ['errorMessage' => '无权限操作，需要"考评管理员"角色'];
+
+        return null;
+    }
+
   public function actionSavedict(){
     $userid = $this->_adminInfo['wxuserid'];
     
@@ -5616,10 +5650,19 @@ public function actionGetuserbyrole(){
       case '版位':
         $needRole='广告审核';
         break;
-      
+      case '被考评部门':
+      case '评分档次':
+        $needRole='考评管理员';
+        break;
       default:
         # code...
         break;
+    }
+    // 考评管理员权限检查
+    if (in_array($p['type'], ['被考评部门', '评分档次'])) {
+        $check = $this->_checkEvaluationAdmin();
+        if ($check) return $check;
+        $needRole = ''; // 权限已在上方检查过，不需要再走checkRole
     }
     try {
       if ($p['id']){
@@ -5661,6 +5704,14 @@ public function actionGetuserbyrole(){
       }
     } catch (\Throwable $th) {
       return array('errorMessage'=>$th->getMessage());
+    }
+    // 考评字典操作日志
+    if (in_array($p['type'], ['被考评部门', '评分档次'])) {
+        $isUpdate = !empty($p['id']);
+        $this->_operationlog([
+            'catalog' => $isUpdate ? '更新考评字典' : '新增考评字典',
+            'remark' => ($isUpdate ? '更新' : '新增') . "【{$p['type']}】字典：{$p['label']}" . ($p['value'] ? "（值：{$p['value']}）" : ""),
+        ]);
     }
     return array('data'=>$p);
   }
@@ -5713,32 +5764,53 @@ public function actionGetuserbyrole(){
     $userid = $this->_adminInfo['wxuserid'];
     $model = FzrbsBudgetDict::findOne($id);
 
-    $needRole='';
-    switch ($model['type']) {
-      case '版位':
-        $needRole='广告审核';
-        break;
-      
-      default:
-        # code...
-        break;
+    if (!$model) return array('errorMessage' => '记录不存在');
+
+    // 考评字典需要考评管理员权限
+    if (in_array($model['type'], ['被考评部门', '评分档次'])) {
+        $check = $this->_checkEvaluationAdmin();
+        if ($check) return $check;
+        // 考评管理员可以删除，不需要检查创建人
+    } else {
+        $needRole='';
+        switch ($model['type']) {
+          case '版位':
+            $needRole='广告审核';
+            break;
+          default:
+            # code...
+            break;
+        }
+
+        if ($model['creator']!=$userid) {
+          if ($needRole){
+              $t = $this->checkRole($needRole);
+              if (!$t){
+                return array('errorMessage'=>'需要['.$needRole.']角色');
+              }
+            }
+          $hasauth = $this->haspower('管理',$this->agentId,'','');
+          if (!$hasauth) return array('errorMessage'=>'只有创建人才能删除');
+        }
     }
 
-    if ($model['creator']!=$userid) {
-      if ($needRole){
-          $t = $this->checkRole($needRole);
-          if (!$t){
-            return array('errorMessage'=>'需要['.$needRole.']角色');
-          }
-        }
-      $hasauth = $this->haspower('管理',$this->agentId,'','');
-      if (!$hasauth) return array('errorMessage'=>'只有创建人才能删除');
-    }
-    
     if(!$id) return array('errorMessage'=>'id 不能为空');
+
+    // 记录删除前信息用于日志
+    $dictLabel = $model['label'];
+    $dictType = $model['type'];
+
     FzrbsBudgetDict::deleteAll(['id'=>$id]);
+
+    // 考评字典操作日志
+    if (in_array($dictType, ['被考评部门', '评分档次'])) {
+        $this->_operationlog([
+            'catalog' => '删除考评字典',
+            'remark' => "删除【{$dictType}】字典：{$dictLabel}",
+        ]);
+    }
+
     return array('data'=>'删除成功');
-  
   }
   
   // =================== 指标 ==================================

@@ -9,6 +9,7 @@ use app\modules\api\models\WeixinOaApprovalLog;
 use app\modules\api\models\WeixinOaDepartment;
 use app\modules\api\models\WeixinOaNotifyLog;
 use app\modules\api\models\WeixinOAUserInfo;
+use app\modules\api\models\WeixinUsesealApprovaldata;
 use Exception;
 
 class WorkflowParse
@@ -28,6 +29,20 @@ class WorkflowParse
     public function __construct($agentid=0)
     {
         $this->_agentId = $agentid;
+    }
+
+    /**
+     * 安全获取ItemName，支持对象或字符串
+     * 对象可能是 {ItemName: "xxx"} 或 {id: 50, tagName: "法务", ...}
+     */
+    private function _getItemName($itemName)
+    {
+        if (is_object($itemName)) {
+      
+            return $itemName->ItemName ?? ($itemName->tagName ?? '');
+        }
+        
+        return $itemName ?? '';
     }
     /**
      * 解析流程模板 
@@ -388,59 +403,93 @@ class WorkflowParse
         $approvaldata = array();
         switch ($this->_agentId) {
           case 1000063:
-            $approvedata = WeixinFlowApprovaldata::find()->where(['and',['=','agentid',$this->_agentId],["=","thirdNo",$thirdNo]])->one();
+            $approvedata = WeixinFlowApprovaldata::find()->where(['and',["=","thirdNo",$thirdNo]])->one();
             break;
-          
+          case 1000065:
+            $approvedata = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->one();
+             
+            break;
           default:
-            $approvedata = $this->approvalModelClass::find()->where(['and',['=','agentid',$this->_agentId],["=","thirdNo",$thirdNo]])->one();
+            $approvedata = $this->approvalModelClass::find()->where(['and',["=","thirdNo",$thirdNo]])->one();
             break;
         }
-        if (!$approvedata) return 0;
-       
+        
+        if (!$approvedata) {
+          $approvedata = WeixinUsesealApprovaldata::find()->where(['thirdNo'=>$thirdNo])->one();
+          if (!$approvedata) return 0;
+        }
+      
         
         $approvearr = json_decode($approvedata['data'],true);
-        $nodes = $approvearr['data']['ApprovalNodes']['ApprovalNode'];
+
+        if (!isset($approvearr['data'])) {
+            $approvearr['data'] = [];
+        }
+        if (!isset($approvearr['data']['ApprovalNodes'])) {
+            $approvearr['data']['ApprovalNodes'] = [];
+        }
+        $nodes = $approvearr['data']['ApprovalNodes']['ApprovalNode'] ?? [];
+
         switch ($this->_agentId) {
           case 1000063:
-            $nodes = $approvearr['data']['ApprovalNodes'];
+            $nodes = $approvearr['data']['ApprovalNodes'] ?? [];
             break;
         }
+
+        // 确保 $nodes 是数组
+        if (!is_array($nodes)) {
+            $nodes = [];
+        }
         foreach ($nodes as $k=>$r) {
+            if (!is_array($r)) continue;
             $tmparr = $r;
-            if(count($r['Items']['Item'])>1){
+            // 安全获取 Items
+            $items = isset($r['Items']['Item']) && is_array($r['Items']['Item']) ? $r['Items']['Item'] : [];
+            if(count($items)>1){
                 $tmparr['title'] = '直接上级';
-                $tmparr['NodeAttr'] = $r['NodeAttr'];
+                $tmparr['NodeAttr'] = $r['NodeAttr'] ?? '';
                 if ($r['NodeType']==2 && isset($r['NodeTagid'])){
                   $tmparr['title'] = $this->getUserTagName($r['NodeTagid']);
                 }else if ($r['NodeType']==0 && isset($r['NodeRoleid'])){
                     $tmparr['title'] = $this->getRoleName($r['NodeRoleid']);
                 }
                 $tmparr['avatar'] = 'https://fzrb.fznews.com.cn/assets/oa/images/approvaltag.png';
-                foreach ($r['Items']['Item'] as $key => $value) {
+                foreach ($items as $key => $value) {
+                    if (!is_array($value)) continue;
                     $itemarr = array();
-                    $itemarr['title'] = $value['ItemName'];
-                    $itemarr['date'] = intval($value['ItemOpTime']) > 0?date('m/d',$value['ItemOpTime']):'';
-                    $itemarr['avatar'] = $value['ItemImage'];
-                    $itemarr['speech'] = $value['ItemSpeech'];
-                    $itemarr['status'] = $value['ItemStatus'];
+                    $itemarr['title'] = $this->_getItemName($value['ItemName'] ?? null);
+                    $itemarr['date'] = intval($value['ItemOpTime'] ?? 0) > 0 ? date('m/d',$value['ItemOpTime']) : '';
+                    $itemarr['avatar'] = $value['ItemImage'] ?? '';
+                    $itemarr['speech'] = $value['ItemSpeech'] ?? '';
+                    $itemarr['status'] = $value['ItemStatus'] ?? '';
                     $tmparr['items'][] = $itemarr;
                 }
+            }else if(count($items)==1){
+                $firstItem = is_array($items[0]) ? $items[0] : [];
+                $tmparr['title'] = $this->_getItemName($firstItem['ItemName'] ?? null);
+                $tmparr['date'] = !empty($firstItem['ItemOpTime']) ? date('m/d',$firstItem['ItemOpTime']) : '';
+                $tmparr['avatar'] = $firstItem['ItemImage'] ?? '';
+                $tmparr['speech'] = $firstItem['ItemSpeech'] ?? '';
+                $tmparr['status'] = $r['NodeStatus'] ?? '';
+                $tmparr['items'] = '';
             }else{
-                $tmparr['title'] = $r['Items']['Item'][0]['ItemName'];
-                $tmparr['date'] = $r['Items']['Item'][0]['ItemOpTime']?date('m/d',$r['Items']['Item'][0]['ItemOpTime']):'';
-                $tmparr['avatar'] = $r['Items']['Item'][0]['ItemImage'];
-                $tmparr['speech'] = $r['Items']['Item'][0]['ItemSpeech'];
-                $tmparr['status'] = $r['NodeStatus'];
+                $tmparr['title'] = '';
+                $tmparr['date'] = '';
+                $tmparr['avatar'] = '';
+                $tmparr['speech'] = '';
+                $tmparr['status'] = $r['NodeStatus'] ?? '';
                 $tmparr['items'] = '';
             }
             $approvaldata[] = $tmparr;
         }
         $notifier = array();
         $notifierUserid = array();
-        if ($approvearr['data']['NotifyNodes']&&$approvearr['data']['NotifyNodes']['NotifyNode']){
-          foreach ($approvearr['data']['NotifyNodes']['NotifyNode'] as $r) {
-              $notifier[] = $r['ItemName'];
-              $notifierUserid[] = $r['ItemUserId'];
+        $notifyNodes = $approvearr['data']['NotifyNodes']['NotifyNode'] ?? null;
+        if (isset($notifyNodes) && is_array($notifyNodes)){
+          foreach ($notifyNodes as $r) {
+              if (!is_array($r)) continue;
+              $notifier[] = $this->_getItemName($r['ItemName'] ?? null);
+              $notifierUserid[] = $r['ItemUserId'] ?? '';
           }
         }
         
@@ -744,7 +793,7 @@ class WorkflowParse
             $notifyUsername = array();
             foreach($approvearr['data']['NotifyNodes']['NotifyNode'] as $notify){
               $notifyUserid[] = $notify['ItemUserId'];
-              $notifyUsername[] = $notify['ItemName'];
+              $notifyUsername[] = $this->_getItemName($notify['ItemName']);
             }
             $ret['tonotify'] = array('userid'=>$notifyUserid,'username'=>$notifyUsername);
           }
@@ -768,7 +817,7 @@ class WorkflowParse
               
               $approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'][$k]['ItemSpeech'] = $speech;
               $approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'][$k]['ItemOpTime'] = $optime;
-              $logdata['userName'] = $item['ItemName'];
+              $logdata['userName'] = $this->_getItemName($item['ItemName']);
             }
           }
         }
@@ -796,7 +845,7 @@ class WorkflowParse
               $notifyUsername = array();
               foreach($approvearr['data']['NotifyNodes']['NotifyNode'] as $notify){
                 $notifyUserid[] = $notify['ItemUserId'];
-                $notifyUsername[] = $notify['ItemName'];
+                $notifyUsername[] = $this->_getItemName($notify['ItemName']);
               }
               $ret['tonotify'] = array('userid'=>$notifyUserid,'username'=>$notifyUsername);
             }
@@ -807,7 +856,7 @@ class WorkflowParse
           $approvalUsername = array();
           foreach($approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'] as $k=>$item){
             $approvalUserid[] = $item['ItemUserId'];
-            $approvalUsername[] = $item['ItemName'];
+            $approvalUsername[] = $this->_getItemName($item['ItemName']);
           }
           $nextdata['approvalUserid'] = implode('|',$approvalUserid);
           $nextdata['approvalUsername'] = implode('|',$approvalUsername);
@@ -1196,22 +1245,26 @@ class WorkflowParse
     {
         if($id){
             $tagdata = $this->usertagModelClass::findOne($id);
-        }else{
-            $tagdata = '审批组';
-        }        
-        return $tagdata;
+            if (is_object($tagdata)) {
+                return $tagdata->tagName ?? $tagdata['tagname'] ?? '审批组';
+            }
+            return $tagdata ?? '审批组';
+        }
+        return '审批组';
     }
     /**
      * 角色名称
      */
     public function getRoleName($id)
     {
-        $tagdata = '审批组';
         if($id){
             $temp = $this->roleModelClass::findOne($id);
-            if ($temp) $tagdata = $temp['rolename'];
-        }      
-        return $tagdata;
+            if (is_object($temp)) {
+                return $temp->rolename ?? $temp['rolename'] ?? '审批组';
+            }
+            return $temp['rolename'] ?? '审批组';
+        }
+        return '审批组';
     }
     // ***********************************************  启动流程  *************************************************
 
@@ -1266,7 +1319,7 @@ class WorkflowParse
           $approvalUsername = array();
           foreach ($flow['ApprovalNodes']['ApprovalNode'][0]['Items']['Item'] as $item) {
             $approvalUserid[] = $item['ItemUserId'];
-            $approvalUsername[] = $item['ItemName'];
+            $approvalUsername[] = $this->_getItemName($item['ItemName']);
           }
           $data = array(
           'agentId'=>$this->_agentId,
@@ -1320,7 +1373,7 @@ class WorkflowParse
                   $tmparr['avatar'] = 'https://fzrb.fznews.com.cn/assets/oa/images/approvaltag.png';
                   foreach ($r['Items']['Item'] as $key => $value) {
                       $itemarr = array();
-                      $itemarr['title'] = $value['ItemName'];
+                      $itemarr['title'] = $this->_getItemName($value['ItemName']);
                       $itemarr['date'] = intval($value['ItemOpTime']) > 0?date('m/d',$value['ItemOpTime']):'';
                       $itemarr['avatar'] = $value['ItemImage'];
                       $itemarr['speech'] = $value['ItemSpeech'];
@@ -1328,7 +1381,7 @@ class WorkflowParse
                       $tmparr['items'][] = $itemarr;
                   }
               }else{
-                  $tmparr['title'] = $r['Items']['Item'][0]['ItemName'];
+                  $tmparr['title'] = $this->_getItemName($r['Items']['Item'][0]['ItemName']);
                   $tmparr['date'] = $r['Items']['Item'][0]['ItemOpTime']?date('m/d',$r['Items']['Item'][0]['ItemOpTime']):'';
                   $tmparr['avatar'] = $r['Items']['Item'][0]['ItemImage'];
                   $tmparr['speech'] = $r['Items']['Item'][0]['ItemSpeech'];
@@ -1339,7 +1392,7 @@ class WorkflowParse
           }
           $notifier = array();
           foreach ($flow['NotifyNodes']['NotifyNode'] as $r) {
-              $notifier[] = $r['ItemName'];
+              $notifier[] = $this->_getItemName($r['ItemName']);
           }
           $step = intval($flow['approverstep'])-1;
 
@@ -1407,7 +1460,7 @@ class WorkflowParse
               $notifyUsername = array();
               foreach($approvearr['data']['NotifyNodes']['NotifyNode'] as $notify){
                 $notifyUserid[] = $notify['ItemUserId'];
-                $notifyUsername[] = $notify['ItemName'];
+                $notifyUsername[] = $this->_getItemName($notify['ItemName']);
               }
               $ret['tonotify'] = array('userid'=>$notifyUserid,'username'=>$notifyUsername);
             }
@@ -1431,7 +1484,7 @@ class WorkflowParse
                 
                 $approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'][$k]['ItemSpeech'] = $speech;
                 $approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'][$k]['ItemOpTime'] = $optime;
-                $logdata['userName'] = $item['ItemName'];
+                $logdata['userName'] = $this->_getItemName($item['ItemName']);
                 
               }
             }
@@ -1464,7 +1517,7 @@ class WorkflowParse
                 $notifyUsername = array();
                 foreach($approvearr['data']['NotifyNodes']['NotifyNode'] as $notify){
                   $notifyUserid[] = $notify['ItemUserId'];
-                  $notifyUsername[] = $notify['ItemName'];
+                  $notifyUsername[] = $this->_getItemName($notify['ItemName']);
                 }
                 $ret['tonotify'] = array('userid'=>$notifyUserid,'username'=>$notifyUsername);
               }
@@ -1477,7 +1530,7 @@ class WorkflowParse
             foreach($approvearr['data']['ApprovalNodes']['ApprovalNode'][$step]['Items']['Item'] as $k=>$item){
               if ($item['ItemStatus']==1){
                 $approvalUserid[] = $item['ItemUserId'];
-                $approvalUsername[] = $item['ItemName'];
+                $approvalUsername[] = $this->_getItemName($item['ItemName']);
               }
               
             }

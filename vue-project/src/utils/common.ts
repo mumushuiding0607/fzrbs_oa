@@ -5,46 +5,75 @@ import router from '@/router';
 import * as ww from '@wecom/jssdk'
 import CryptoJS from 'crypto-js'
 
+// 缓存微信config数据
+let cachedWeixinConfig: any = null
+let configLoading = false
+let configLoadPromise: Promise<any> | null = null
+
 export const loadWeixinConfig = (option: any) => {
+    // 如果已经有缓存的config，直接使用
+    if (cachedWeixinConfig) {
+        applyWeixinConfig(cachedWeixinConfig, option)
+        return Promise.resolve(cachedWeixinConfig)
+    }
+
+    // 如果正在加载中，返回已有的promise
+    if (configLoading && configLoadPromise) {
+        return configLoadPromise
+    }
+
     const url = window.location.href.split('#')[0]
-    weixinConfigData(url).then((res: any) => {
+    configLoading = true
+    configLoadPromise = weixinConfigData(url).then((res: any) => {
+        configLoading = false
         if (res.data) {
-            wx.config({
-                beta: true,
-                debug: false,
-                appId: res.data.appId, // 必填，企业微信的corpID
-                timestamp: res.data.timestamp, // 必填，生成签名的时间戳
-                nonceStr: res.data.nonceStr, // 必填，生成签名的随机串
-                signature: res.data.signature,// 必填，签名，见附录1
-                jsApiList: [
-                    'hideOptionMenu',
-                    'previewImage',
-                    'openEnterpriseContact',
-                    'selectEnterpriseContact',
-                    'invoke',
-                    'scanQRCode',
-                    'hideMenuItems',
-                    'onMenuShareAppMessage',
-                    'onMenuShareTimeline',
-                    'updateAppMessageShareData',
-                    'getBrandWCPayRequest',
-                    'closeWindow'
-                ] // 必填，需要使用的JS接口列表，所有JS接口列表见附录2
-            });
-            wx.ready(function () {
-                if (option?.hideOptionMenu) {
-                    wx.hideOptionMenu();
-                } else {
-                    wx.hideMenuItems({
-                        menuList: ['menuItem:share:timeline', 'menuItem:share:qq', 'menuItem:share:weiboApp', 'menuItem:favorite', 'menuItem:share:facebook', 'menuItem:share:QZone', 'menuItem:copyUrl', 'menuItem:originPage', 'menuItem:openWithQQBrowser', 'menuItem:openWithSafari', 'menuItem:share:email', 'menuItem:share:brand']
-                    });
-                }
-                if (option?.updateAppMessageShareData) {
-                    wx.onMenuShareAppMessage(option?.updateAppMessageShareData)
-                }
+            cachedWeixinConfig = res.data
+            applyWeixinConfig(res.data, option)
+        }
+        return res
+    }).catch((err: any) => {
+        configLoading = false
+        throw err
+    })
+
+    return configLoadPromise
+}
+
+const applyWeixinConfig = (configData: any, option: any) => {
+    wx.config({
+        beta: true,
+        debug: false,
+        appId: configData.appId, // 必填，企业微信的corpID
+        timestamp: configData.timestamp, // 必填，生成签名的时间戳
+        nonceStr: configData.nonceStr, // 必填，生成签名的随机串
+        signature: configData.signature,// 必填，签名，见附录1
+        jsApiList: [
+            'hideOptionMenu',
+            'previewImage',
+            'openEnterpriseContact',
+            'selectEnterpriseContact',
+            'invoke',
+            'scanQRCode',
+            'hideMenuItems',
+            'onMenuShareAppMessage',
+            'onMenuShareTimeline',
+            'updateAppMessageShareData',
+            'getBrandWCPayRequest',
+            'closeWindow'
+        ] // 必填，需要使用的JS接口列表，所有JS接口列表见附录2
+    });
+    wx.ready(function () {
+        if (option?.hideOptionMenu) {
+            wx.hideOptionMenu();
+        } else {
+            wx.hideMenuItems({
+                menuList: ['menuItem:share:timeline', 'menuItem:share:qq', 'menuItem:share:weiboApp', 'menuItem:favorite', 'menuItem:share:facebook', 'menuItem:share:QZone', 'menuItem:copyUrl', 'menuItem:originPage', 'menuItem:openWithQQBrowser', 'menuItem:openWithSafari', 'menuItem:share:email', 'menuItem:share:brand']
             });
         }
-    })
+        if (option?.updateAppMessageShareData) {
+            wx.onMenuShareAppMessage(option?.updateAppMessageShareData)
+        }
+    });
 }
 
 export const previewImage = (urls: string[], url: string) => {

@@ -178,6 +178,26 @@ const router = createRouter({
       }
     },
     {
+      path: '/evaluation/index',
+      name: 'evaluation_index',
+      component: () => import('../views/evaluation/index.vue'),
+      meta: {
+        title: '考评系统',
+        keepAlive: false,
+        requiresLogin: true,
+      }
+    },
+    {
+      path: '/evaluation/scoring',
+      name: 'evaluation_scoring',
+      component: () => import('../views/evaluation/scoring.vue'),
+      meta: {
+        title: '评分',
+        keepAlive: false,
+        requiresLogin: true,
+      }
+    },
+    {
       path: '/contract/debturge',
       name: 'contract_debturge',
       component: () => import('../views/contract/debturge.vue'),

@@ -1,27 +1,22 @@
 import { TableListItem } from "@/pages/admin/Department/data";
-import { MenuOutlined, MinusOutlined, PlusOutlined } from "@ant-design/icons";
-import { PageContainer, ProColumns, ProFormColumnsType, ProFormInstance, ProTable } from "@ant-design/pro-components";
-import { Affix, Button, Drawer, Layout, List, Modal, message } from "antd";
+import { MinusOutlined, PlusOutlined } from "@ant-design/icons";
+import { ProColumns, ProFormColumnsType, ProFormInstance, ProTable } from "@ant-design/pro-components";
+import { Button, Modal, message } from "antd";
 import { useRef, useState } from "react";
-import { TableListPagination } from "../project/data";
-import { useHistory, useLocation } from "react-router-dom";
 import { deldict, getdictlist } from "./service";
 import { ActionType } from "@ant-design/pro-table";
 import Dicttypeselect from "./dicttypeselect";
 import Adddict from "./adddict";
 import { AGENTID } from "../config";
-const Dictlist: React.FC<{agentid?:any}> = ({agentid}) => {
+
+const Dictlist: React.FC<{ agentid?: any; type?: string }> = ({ agentid, type }) => {
   const proTableFormRef = useRef<ProFormInstance>();
-  const location = useLocation() as any;
   const actionRef = useRef<ActionType>();
-  const treeRef = useRef();
-  const [data,setData] = useState({})
-  const [showModal,setShowModal]=useState(false)
-  const [open, setOpen] = useState(false);
-  const [params, setParams] = useState({type:location.query.type,agentid});
-  var [refresh,setRefresh] = useState(0)
-  
-  const history = useHistory();
+  const [data, setData] = useState<any>({});
+  const [showModal, setShowModal] = useState(false);
+  const [params, setParams] = useState<any>({ type, agentid });
+  var [refresh, setRefresh] = useState(0);
+
   const columns: ProFormColumnsType<TableListItem>[] = [
     {
       title: 'ID',
@@ -33,17 +28,15 @@ const Dictlist: React.FC<{agentid?:any}> = ({agentid}) => {
     {
       title: '类型',
       dataIndex: 'type',
-      renderFormItem: (_, { type, defaultRender, ...rest }, form) => {
-
-        return (
-          <Dicttypeselect  onChange={onDictChange}/>
-
-        )
+      hideInForm: true,
+      renderFormItem: (_, { type: colType, defaultRender, ...rest }, form) => {
+        return <Dicttypeselect onChange={onDictChange} value={params.type} />;
       }
     },
     {
       title: '子类型',
       dataIndex: 'subtype',
+      hideInSearch: true,
     },
     {
       title: '名称',
@@ -56,25 +49,28 @@ const Dictlist: React.FC<{agentid?:any}> = ({agentid}) => {
     {
       title: '涉及部门',
       dataIndex: 'dept',
-      hideInSearch: false,
-      render:(_,entity:any) => (<span>
-          {typeof entity.dept === 'string'?('相关部门'+entity.dept.split(',').length+'个'):''}
-        
-      </span>)
+      hideInSearch: true,
+      render: (_, entity: any) => (
+        <span>
+          {typeof entity.dept === 'string' ? `相关部门${entity.dept.split(',').length}个` : ''}
+        </span>
+      )
     },
-
     {
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      render: (_, entity:any) => [
+      hideInSearch: true,
+      render: (_, entity: any) => [
         <a
           key="edit"
           onClick={() => {
-            if (entity.dept && typeof entity.dept === 'string') entity.dept = entity.dept.split(',')
-            setData(entity)
-            setRefresh(++refresh)
-            setShowModal(true)
+            if (entity.dept && typeof entity.dept === 'string') {
+              entity.dept = entity.dept.split(',');
+            }
+            setData(entity);
+            setRefresh(refresh + 1);
+            setShowModal(true);
           }}
         >
           修改
@@ -83,130 +79,81 @@ const Dictlist: React.FC<{agentid?:any}> = ({agentid}) => {
           key="delete"
           onClick={() => {
             Modal.confirm({
-                title: '确定要删除吗？',
-                okText: '确认',
-                cancelText: '取消',
-                onOk: async () => {
-                  deldict({id:entity.id}).then((res:any)=>{
-                    if (res.errorMessage){
-                      Modal.error({title:res.errorMessage})
-                    } else {
-                      actionRef.current?.reload()
-                    }
-                  })
-                },
-              });
-           }}
+              title: '确定要删除吗？',
+              okText: '确认',
+              cancelText: '取消',
+              onOk: async () => {
+                const res: any = await deldict({ id: entity.id });
+                if (res.errorMessage) {
+                  Modal.error({ title: res.errorMessage });
+                } else {
+                  message.success('删除成功');
+                  actionRef.current?.reload();
+                }
+              },
+            });
+          }}
         >
           删除
         </a>,
       ],
     },
   ];
-  const onDictChange = (e:any)=>{
-    params.type = e
-    setParams(params)
-    proTableFormRef.current?.setFieldsValue({type:e})
-    actionRef.current?.reload()
-  }
-  const  addonchange = (e:any)=>{
 
-    actionRef.current?.reload()
-    setShowModal(false)
-  } 
+  const onDictChange = (e: any) => {
+    setParams({ type: e, agentid });
+    proTableFormRef.current?.setFieldsValue({ type: e });
+  };
+
+  const addonchange = () => {
+    actionRef.current?.reload();
+    setShowModal(false);
+  };
 
   return (
-    <PageContainer
-      title='字典管理'
-      header={{
-        breadcrumb: {
-          routes: [
-            {
-              path: '',
-              breadcrumbName: '上一页',
-            },
-            {
-              path: '/finance/budget/index/',
-              breadcrumbName: '首页',
-            }
-            
-          ],itemRender(route, params, routes, paths) {
-            if (route.breadcrumbName=='上一页'){
-              return <a href='#' onClick={()=>history.goBack()}>{route.breadcrumbName}</a>
-            } else {
-              return <a href={`/${paths.join("/")}`}>{route.breadcrumbName}</a>
-            }
-          },
-    
-        },
-      }}
-    >
-      
+    <>
+      <ProTable
+        headerTitle="字典列表"
+        actionRef={actionRef}
+        formRef={proTableFormRef}
+        rowKey={(record: any) => record.id}
+        params={params}
+        search={{
+          labelWidth: 120,
+        }}
+        request={(params: any) => {
+          document.body.scrollTop = document.documentElement.scrollTop = 0;
+          const reqParams = { ...params };
+          if (agentid) reqParams.agentid = agentid;
+          return getdictlist(reqParams);
+        }}
+        columns={columns as ProColumns<TableListItem>[]}
+        toolBarRender={() => [
+          <Button
+            type="primary"
+            key="primary"
+            onClick={() => {
+              setData({ type });
+              setRefresh(refresh + 1);
+              setShowModal(true);
+            }}
+          >
+            <PlusOutlined /> 新建
+          </Button>,
+        ]}
+      />
 
-      <Layout>
-
-        <Layout>
-          <Layout.Content>
-            
-            <ProTable
-              headerTitle="流程角色用户列表"
-              actionRef={actionRef}
-              formRef={proTableFormRef}
-              rowKey={record=>record.id}
-              params={params}
-              search={{
-                labelWidth: 120,
-              }}
-
-              request={(params, sorter, filter) => {
-                document.body.scrollTop = document.documentElement.scrollTop = 0;
-                if (agentid) params.agentid = agentid
-                return getdictlist(params);
-              }}
-              columns={columns as ProColumns<TableListItem>[]}
-              rowSelection={{
-                onChange: (_, selectedRows) => {
-            
-                },
-              }}
-              tableAlertRender={false}
-              toolBarRender={() => [
-                <Button
-                  type="primary"
-                  key="primary"
-                  onClick={() => {
-                    setData(params||{})
-                    setRefresh(++refresh)
-                    setShowModal(true)
-                  }}
-                >
-                  <PlusOutlined /> 新建
-                </Button>,
-                <Button
-                  type="primary"
-                  key="delete"
-                  onClick={async () => {
-                   
-                  }}
-                >
-                  <MinusOutlined /> 批量删除
-                </Button>,
-              ]}
-            />
-          </Layout.Content>
-        </Layout>
-      </Layout>
       <Modal
-        title="更新"
-        style={{ top: 20, }}
+        title={data?.id ? '修改' : '新建'}
+        style={{ top: 20 }}
         visible={showModal}
-        onOk={() => setShowModal(false)}
         onCancel={() => setShowModal(false)}
         footer={null}
       >
-        <Adddict key={refresh} data={data} onChange={addonchange} agentid={AGENTID}/>
+        <Adddict key={refresh} data={data} onChange={addonchange} agentid={AGENTID} />
       </Modal>
-    </PageContainer>
+    </>
   );
-}
+};
+
 export default Dictlist;

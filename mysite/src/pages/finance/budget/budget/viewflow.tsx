@@ -443,7 +443,7 @@ const Viewflow:React.FC<{thirdno?:any,onchange?:Function,state?:any,projectid?:a
             {/* </Card> */}
 
 
-            <Flow data={viewdata} thirdNo={thirdno} condition={basic} statusCn={statusCn} step={step} offlineAgree={onOfflineAgree} onUpdate={handleFlowUpdate}></Flow>
+            <Flow data={viewdata} thirdNo={thirdno||basic?.thirdno} condition={basic} statusCn={statusCn} step={step} offlineAgree={onOfflineAgree} onUpdate={handleFlowUpdate}></Flow>
             
             
 
