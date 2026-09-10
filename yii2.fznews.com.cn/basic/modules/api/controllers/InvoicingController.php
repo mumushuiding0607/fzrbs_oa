@@ -1722,27 +1722,31 @@ class InvoicingController extends ApiBase{
       $paycollection = $this->upContractPaycollection($old['contractid']);
 
       // 广告管理系统
-      $payment = Yii::$app->paymentdb->createCommand("SELECT * FROM payment where SYS_DELETEFLAG=0 and SYS_CURRENTSTATUS='借票回款' and P_InvoiceNo=".substr($old['EIid'], -8)." and P_Amount=".$old['amount'])->queryOne();
-      
+      if (!empty($old['EIid'])) {
+        $invoiceNo = substr($old['EIid'], -8);
+        $payment = Yii::$app->paymentdb->createCommand(
+          "SELECT * FROM payment WHERE SYS_DELETEFLAG=0 and SYS_CURRENTSTATUS='借票回款' and P_InvoiceNo=:invoiceNo and P_Amount=:amount"
+        )->bindValues([':invoiceNo' => $invoiceNo, ':amount' => $old['amount']])->queryOne();
 
-      if($payment){
-        $source = Yii::$app->paymentdb->createCommand("SELECT * FROM payment where SYS_DELETEFLAG=0 and SYS_DOCUMENTID=".$payment['P_SrcID'])->queryOne();
-        if($source['P_BalancedMoney']>0){
-          return array('errorMessage'=>'已平账，先反平账再删除');
+        if ($payment) {
+          $source = Yii::$app->paymentdb->createCommand("SELECT * FROM payment where SYS_DELETEFLAG=0 and SYS_DOCUMENTID=".$payment['P_SrcID'])->queryOne();
+          if($source['P_BalancedMoney']>0){
+            return array('errorMessage'=>'已平账，先反平账再删除');
+          }
+          $invoice = Yii::$app->paymentdb->createCommand(
+            "SELECT * FROM invoice where SYS_DELETEFLAG=0 and I_InvoiceNo=:invoiceNo"
+          )->bindValue(':invoiceNo', $invoiceNo)->queryOne();
+
+          $source['P_Amount'] = $source['P_Amount'] - $payment['P_Amount'];
+          $invoice['I_AmountBack'] = $invoice['I_AmountBack'] - $payment['P_Amount'];
+
+          // 删除payment
+          Yii::$app->paymentdb->createCommand()->delete('payment', ['=', "SYS_DOCUMENTID",  $payment['SYS_DOCUMENTID']])->execute();
+          Yii::$app->paymentdb->createCommand()->update('payment', ['P_Amount' => $source['P_Amount']], ['=', "SYS_DOCUMENTID",  $source['SYS_DOCUMENTID']])->execute();
+          Yii::$app->paymentdb->createCommand()->update('invoice', ['I_AmountBack' => $invoice['I_AmountBack']], ['=', "SYS_DOCUMENTID",  $invoice['SYS_DOCUMENTID']])->execute();
+        } else {
+          return array('errorMessage' => '未找到对应的回款');
         }
-        $invoice = Yii::$app->paymentdb->createCommand("SELECT * FROM invoice where SYS_DELETEFLAG=0 and I_InvoiceNo=".substr($old['EIid'], -8)." ")->queryOne();
-
-        $source['P_Amount'] = $source['P_Amount'] - $payment['P_Amount'];
-        $invoice['I_AmountBack'] = $invoice['I_AmountBack'] - $payment['P_Amount'];
-        
-        // 删除payment
-        Yii::$app->paymentdb->createCommand()->delete('payment', ['=', "SYS_DOCUMENTID",  $payment['SYS_DOCUMENTID']])->execute();
-        Yii::$app->paymentdb->createCommand()->update('payment', ['P_Amount' => $source['P_Amount']], ['=', "SYS_DOCUMENTID",  $source['SYS_DOCUMENTID']])->execute();
-        Yii::$app->paymentdb->createCommand()->update('invoice', ['I_AmountBack' => $invoice['I_AmountBack']], ['=', "SYS_DOCUMENTID",  $invoice['SYS_DOCUMENTID']])->execute();
-
-
-      }else{
-        return array('errorMessage'=>'未找到对应的回款');
       }
 
     

@@ -1773,6 +1773,21 @@ class BudgetController extends ApiBase{
    
     return $arr;
   }
+
+  private function getTotalpaycollection($contractid){
+    $total = FzrbsContractPaycollection::find()->select('sum(amount) as amount')->where(['and',['=','contractid',$contractid],['=','state',3]])->orderBy('contractid desc')->asArray()->one();
+    if ($total && $total['amount']) {
+      return $total['amount'];
+    }
+    return 0;
+  }
+
+  protected function upContractPaycollection($id){
+    $paycollection = $this->getTotalpaycollection($id);
+    FzrbsContract::updateAll(['paycollection'=>$paycollection],['id'=>$id]);
+    return $paycollection;
+  }
+
   public function actionGetonlyproject(){
     $id = $this->_request['id'];
     $field = $this->_request['field'];
@@ -3490,7 +3505,9 @@ class BudgetController extends ApiBase{
       // 更新项目已收款金额
       $this->updateProReceivedWhenPaycheck($c['id']);
 
-      
+      // 更新合同回款总额
+      $this->upContractPaycollection($c['id']);
+
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
@@ -3532,14 +3549,16 @@ class BudgetController extends ApiBase{
       // 更新项目已收款金额
       $this->updateProReceivedWhenPaycheck($c['id']);
 
-      
+      // 更新合同回款总额
+      $this->upContractPaycollection($c['id']);
+
     } catch (\Throwable $th) {
       $transaction->rollBack();
       return array('errorMessage'=>$th->getMessage());
     }
     $transaction->commit();
     return array('ret'=>1);
-  
+
   }
   // 查询需要回款确认的合同
   public function actionPaycollectionchecklist(){

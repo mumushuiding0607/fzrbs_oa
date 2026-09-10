@@ -1,0 +1,12 @@
+{
+  "tasks": [
+    {
+      "id": "182fa09b",
+      "cron": "* * * * *",
+      "prompt": "cd E:/Workspaces/fzrbs_oa && git push 2>&1",
+      "createdAt": 1789030375752,
+      "lastFiredAt": 1789031823296,
+      "recurring": true
+    }
+  ]
+}

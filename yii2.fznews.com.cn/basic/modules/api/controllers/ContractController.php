@@ -1298,14 +1298,20 @@ class ContractController extends ApiBase{
     $transaction = Yii::$app->getDb()->beginTransaction();
     try {
       if ($obj['id']){
+        $old = FzrbsContractPaycollection::findOne($obj['id']);
         FzrbsContractPaycollection::updateAll($obj,['id'=>$obj['id']]);
+        // 更新后重新计算合同回款总额
+        $paycollection = $this->getTotalpaycollection($c['id']);
       } else {
         $obj['creator'] = $this->_adminInfo['wxuserid'];
+        $obj['state'] = 1;  // 待确认状态
         unset($obj['agentid']);
         $obj = new FzrbsContractPaycollection($obj);
         $obj->save();
+        // 新增待确认回款，不更新合同总额，等确认后再计算
+        $paycollection = $this->getTotalpaycollection($c['id']);
       }
-      
+
       FzrbsContract::updateAll(['paycollection'=>$paycollection],['id'=>$c['id']]);
       $this->_operationlog([
         'catalog' => $obj['id'] ? '修改回款' : '新增回款',
@@ -1319,6 +1325,7 @@ class ContractController extends ApiBase{
     return array('ret'=>1,'left'=>$left,'paycollection'=>$paycollection);
 
   }
+
   // ******************************* 数据统计 *********************************************
 
   /**
