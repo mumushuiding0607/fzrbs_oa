@@ -39,6 +39,7 @@ class InvoicingsyncController extends Controller
     protected $_request = null;
     protected $INCOME_DICID = 15;
     protected $EXPEND_DICID = 16;
+    protected $agentId = 1000083;
 
     public function init()
     {
@@ -1023,15 +1024,26 @@ private function escape($string)
         // 构建权限条件
         if (sizeof($depts) > 0) {
             // 没有指定部门时，需要查询我创建的或有权限的部门
+            $deptIds = trim(implode(',', array_filter($depts)), ',');
             if (empty($this->_request['departmentid'])) {
-                $permissionCondition = "(".$myRelatedCondition.") OR (departmentid IN (" . implode(',', $depts) . "))";
+                // 检查用户是否有广告审核或会计角色，如果有则允许查看部门为空的记录
+                $canViewEmptyDept = ($this->checkRole('广告审核', $userId) || $this->checkRole('会计', $userId));
+                if ($canViewEmptyDept) {
+                    $permissionCondition = "(".$myRelatedCondition.") OR (departmentid IN (" . $deptIds . ")) OR (departmentid IS NULL) OR (departmentid = '')";
+                } else {
+                    $permissionCondition = "(".$myRelatedCondition.") OR (departmentid IN (" . $deptIds . "))";
+                }
             } else {
-                $permissionCondition = "(departmentid IN (" . implode(',', $depts) . "))";
+                $permissionCondition = "(departmentid IN (" . $deptIds . "))";
             }
         } else {
             // 没有部门权限时，只能查询与我相关的
-    
-            $permissionCondition = $myRelatedCondition;
+            // 检查用户是否有广告审核或会计角色，如果有则允许查看部门为空的记录
+            if ($this->checkRole('广告审核', $userId) || $this->checkRole('会计', $userId)) {
+                $permissionCondition = "(".$myRelatedCondition.") OR (departmentid IS NULL) OR (departmentid = '')";
+            } else {
+                $permissionCondition = $myRelatedCondition;
+            }
         }
         $advwhere .= " AND ({$permissionCondition})";
       }
@@ -1392,6 +1404,27 @@ private function escape($string)
       echo json_encode($result,JSON_UNESCAPED_UNICODE);
       exit;
    }
+
+   /**
+    * 检查用户是否有指定角色
+    * @param string $roleName 角色名称
+    * @param string|null $userid 用户ID（优先使用前端传递的）
+    * @return bool
+    */
+   private function checkRole($roleName, $userid = null)
+   {
+       // 优先使用前端传递的userid，否则使用_adminInfo中的
+       if (empty($userid)) {
+           if (!isset($this->_adminInfo) || empty($this->_adminInfo['wxuserid'])) {
+               return false;
+           }
+           $userid = $this->_adminInfo['wxuserid'];
+       }
+       $sql = "SELECT userid from weixin_oa_flowrole where userid='" . $userid . "' and role in (select id from weixin_oa_role where rolename = '$roleName')";
+       $result = WeixinOaFlowrole::findBySql($sql)->asArray()->all();
+       return !empty($result);
+   }
+
    private function getDepts($userid){
       $power = '查看';
   

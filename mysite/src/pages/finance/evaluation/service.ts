@@ -21,6 +21,9 @@ export async function getTasks(params: {
   year?: number;
   quarter?: number;
   status?: number;
+  keyword?: string;
+  current?: number;
+  pageSize?: number;
 }) {
   return request<any>('/api/evaluation/gettasks', {
     method: 'POST',

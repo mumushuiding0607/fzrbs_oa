@@ -259,24 +259,26 @@ class BudgetController extends ApiBase{
     $this->sendmsg($msgdata);
   }
   private function sendChanges($approvalUserid,$title,$data,$changes){
-    if (!$approvalUserid) return;
-    $description = "<div class='normal'>".$changes['title']."</div>";
-    foreach ($changes['items'] as $item) {
-      $description .= "<div class='normal'>".$item['title']."：【".$item['oldval']."】修改成【".$item['newval']."】</div>";
-    }
-    $msgdata = [
-      'touser' => $approvalUserid,
-      'msgtype' => 'textcard',
-      'agentid' => $this->agentId,
-      'textcard' => [
-          'title' => $title,
-          'description' => $description,
-          'url' => "https://api.fznews.com.cn/weixin/work-web-oauth/index?backurl=https://fzrb.fznews.com.cn/v2/budget/view?projectid=".$data['id']."&thirdNo=".$data['thirdno'],
-          'btntxt' => '详情'
+    // if (!$approvalUserid) return;
+    // $description = "<div class='normal'>".$changes['title']."</div>";
+    // if (!empty($changes['items']) && is_array($changes['items'])) {
+    //   foreach ($changes['items'] as $item) {
+    //     $description .= "<div class='normal'>".$item['title']."：【".$item['oldval']."】修改成【".$item['newval']."】</div>";
+    //   }
+    // }
+    // $msgdata = [
+    //   'touser' => $approvalUserid,
+    //   'msgtype' => 'textcard',
+    //   'agentid' => $this->agentId,
+    //   'textcard' => [
+    //       'title' => $title,
+    //       'description' => $description,
+    //       'url' => "https://api.fznews.com.cn/weixin/work-web-oauth/index?backurl=https://fzrb.fznews.com.cn/v2/budget/view?projectid=".$data['id']."&thirdNo=".$data['thirdno'],
+    //       'btntxt' => '详情'
           
-      ]
-    ];
-    $this->sendmsg($msgdata);
+    //   ]
+    // ];
+    // $this->sendmsg($msgdata);
   }
   private function sendmsg($data)
   {
@@ -1354,12 +1356,6 @@ class BudgetController extends ApiBase{
       }
       
     }
-    // 消息通知
-    $tousers = $this->getUserHasApproved($obj['id']);// 查询当前项目是否在审批，哪些人已经审批过了
-    if ($tousers && $title){
-      // 判断修改了哪些字段
-      $this->sendChanges($tousers, $this->userinfo['name']."修改了【".$p['title']."】的项目报告", $p,array('title'=>$title));
-    }
 
     return array('data'=>$obj);
   }
@@ -1817,11 +1813,12 @@ class BudgetController extends ApiBase{
       // relatedcontractids去掉空字符串
       $relatedcontractids = implode(',',array_filter(explode(',',$relatedcontractids)));
       $relatedcontract = FzrbsContract::findBySql("SELECT sum(paycollection) as paycollection,group_concat(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.partaname END) as partincome,group_concat(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.partbname END) as partexpend,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.amount ELSE 0 END) AS `contractincome`,sum(CASE WHEN c.type=".$this->INCOME_DICID." THEN c.invoiceamount ELSE 0 END) AS `incomeinvoiceamount`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.amount ELSE 0 END) AS `contractexpend`,sum(CASE WHEN c.type=".$this->EXPEND_DICID." THEN c.invoiceamount ELSE 0 END) AS `expendinvoiceamount` from fzrbs_contract c where c.id in($relatedcontractids)")->asArray()->one();
-      // 查询合同的已回款金额
-      
-      $res['paycollection'] = $relatedcontract['paycollection'];
-    }
 
+      $res['paycollection'] = $relatedcontract['paycollection'];
+ 
+  
+    } 
+  
     $result['data'] = $res;
     $result['contract'] = $relatedcontract;
     
@@ -2613,21 +2610,6 @@ class BudgetController extends ApiBase{
       if ($diffLength > $maxLength) {
         return array('errorMessage' => "每次仅能修改{$maxLength}个字");
       }
-      // 记录受限修改的日志（仅当有变化时）
-      if ($diffContent !== '无变化') {
-        $this->_operationlog([
-          'catalog' => '预算决算变更',
-          'remark' => "[budgetID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
-        ]);
-      }
-    } else {
-      // 决算之前，记录日志（仅当有变化时）
-      if ($diffContent !== '无变化') {
-        $this->_operationlog([
-          'catalog' => '预算决算变更',
-          'remark' => "[budgetID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}"
-        ]);
-      }
     }
 
     // 更新报告内容
@@ -2638,20 +2620,38 @@ class BudgetController extends ApiBase{
       return array('errorMessage' => $th->getMessage());
     }
 
-    // 决算之前修改，发送消息通知（复用现有逻辑）
-    if ($p->state < $this->FINAL_PROJECT) {
-      $tousers = $this->getUserHasApproved($id);
-      if ($tousers) {
-        $this->sendChanges($tousers, $this->userinfo['name'] . "修改了【" . $p->title . "】的{$reportTypeLabel}", $p, array('title' => "更新了【{$reportTypeLabel}】"));
+    // 记录日志（diff计算较耗时，放到响应发送后异步执行）
+    if ($diffContent !== '无变化') {
+      $logRemark = "[budgetID:{$p->id}] 项目【{$p->title}】修改了【{$reportTypeLabel}】\n变更内容：\n{$diffContent}";
+      $logCatalog = '预算决算变更';
+
+      if (function_exists('fastcgi_finish_request')) {
+        // 先返回响应给客户端，再异步写日志
+        $response = array('data' => $content);
+        echo json_encode($response);
+        fastcgi_finish_request();
+
+        // 写日志
+        $this->_operationlog([
+          'catalog' => $logCatalog,
+          'remark' => $logRemark
+        ]);
+        return null;
       }
+
+      // 没有fastcgi_finish_request时，同步执行日志
+      $this->_operationlog([
+        'catalog' => $logCatalog,
+        'remark' => $logRemark
+      ]);
     }
 
     return array('data' => $content);
   }
 
   /**
-   * 计算两个文本之间的字符级差异，只返回替换内容
-   * 返回格式：旧字符 → 新字符
+   * 计算两个文本之间的差异
+   * 返回格式：旧文本 → 新文本
    */
   private function _diffTextCharLevel($oldText, $newText) {
     if ($oldText === $newText) {
@@ -3909,12 +3909,6 @@ class BudgetController extends ApiBase{
         FzrbsBudgetBalance::updateAll($obj,['id'=>$obj['id']]);
 
 
-        // 消息通知
-        $tousers = $this->getUserHasApproved($projectid);// 查询当前项目是否在审批，哪些人已经审批过了
-        if ($tousers && sizeof($changeitems)>0){
-          // 判断修改了哪些字段
-          $this->sendChanges($tousers, $this->userinfo['name']."修改了【".$project['title']."】的收支项目", $project,array('title'=>'收支项目名称：'.$oldb['title'],'items'=>$changeitems));
-        }
         
       } else {
       
@@ -5281,20 +5275,29 @@ class BudgetController extends ApiBase{
             if (!preg_match('/专票：税率/', $element['budgetnote'])) {
                 $element['budgetnote']=$element['budgetnote'].'（专票：税率'.$element['tax'].'%）';
             }
-    
-            
-            
+
+
             $budgettaxtotalnote = $budgettaxtotalnote .'-'. $this->getTaxNote($element['budget'],$element['tax'],$project['expendtaxformula']);
+          } else {
+            // 非专票或未标记为专票，不扣减支出税费
+            if ($element['budget'] > 0) {
+              $budgettaxtotalnote = $budgettaxtotalnote .'+【含非专票支出，不扣减】';
+            }
           }
           if ($element['finalspecialinvoice']){ // 决算是专票
             // ********************** 支出税费公式：  支出*税率     ****************************************
-            
+
             $finaltaxtotal = $finaltaxtotal - $this->getTax($element['final'],$element['finaltax'],$project['finalexpendtaxformula']);
             if (!preg_match('/专票：税率/', $element['finalnote'])) {
                 $element['finalnote']=$element['finalnote'].'（专票：税率'.$element['finaltax'].'%）';
             }
-            
+
             $finaltaxtotalnote = $finaltaxtotalnote .'-'. $this->getTaxNote($element['final'],$element['finaltax'],$project['finalexpendtaxformula']);
+          } else {
+            // 非专票或未标记为专票，不扣减支出税费
+            if ($element['final'] > 0) {
+              $finaltaxtotalnote = $finaltaxtotalnote .'+【含非专票支出，不扣减】';
+            }
           }
           
           

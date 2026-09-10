@@ -125,8 +125,6 @@ export default {
     scoreOptions: {
       type: Array,
       default: () => [
-        { value: 95, label: '非常满意' },
-        { value: 85, label: '满意' },
         { value: 70, label: '基本满意' },
         { value: 60, label: '不满意' },
         { value: 50, label: '非常不满意' },
@@ -307,7 +305,7 @@ export default {
 }
 
 .form-section {
-  padding: 4px;
+  padding: 8px;
 }
 
 .section-label {

@@ -42,6 +42,7 @@ import PreviewCalendarModal from './PreviewCalendarModal';
 const OrderList: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const formRef = useRef<ProFormInstance>();
+  const paramsRef = useRef<any>({});
   const [modalVisible, setModalVisible] = useState(false);
   const [advModalVisible, setAdvModalVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<any>({});
@@ -129,6 +130,17 @@ const [previewVisible, setPreviewVisible] = useState(false);
   }, []);
 
   const columns:any = [
+    {
+      title: '序号',
+      dataIndex: 'index',
+      key: 'index',
+      width: 60,
+      hideInSearch: true,
+      render: (_: any, _1: any, index: number) => {
+        const { current = 1, pageSize = 20 } = paramsRef.current || {};
+        return (current - 1) * pageSize + index + 1;
+      },
+    },
     {
       title: '订单编号',
       dataIndex: 'SYS_DOCUMENTID',
@@ -499,6 +511,7 @@ return (
             columns={columns}
             request={async (params: any, sorter: any) => {
               document.body.scrollTop = document.documentElement.scrollTop = 0;
+              paramsRef.current = params;
               
               if (sorter) {
                 Object.keys(sorter).forEach((key) => {

@@ -719,7 +719,10 @@ const Listc:React.FC = () =>{
                 params.endtime = params.date[1]+' 23:59:59'
               }
               if (params.signdept) {
-                params.signdeptid = params.signdept.join(',')
+                params.signdept = params.signdept.map((e: any) => typeof e === 'object' ? e.value : e).join(',')
+              }
+              if (params.departmentid) {
+                params.departmentid = params.departmentid.map((e: any) => typeof e === 'object' ? e.value : e).join(',')
               }
               // if (params.balancetypename) params.balancetype = params.balancetypename
               if (params.balancetypename && params.balancetypename[0]) params.balancetypename = params.balancetypename.map((e:any)=>e.label).join(',')
@@ -1013,7 +1016,7 @@ const Listc:React.FC = () =>{
           ref.current?.reload(true)
         }}></Nullify>
         {/* 变更记录 */}
-        <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+        <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null} width={500}>
           <OperationLog key={currentLogId} api={getoperationlogs} bizId={currentLogId} />
         </Modal>
         {/* 批量转人 */}

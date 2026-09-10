@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Button, Card, Col, Form, Input, Modal, Row, Space, Statistic } from 'antd';
+import { Button, Card, Col, Form, Input, Modal, Row, Space, Statistic, Spin } from 'antd';
 
 import { alterproreport, getreportbyprojectid } from './service';
 import UEditorComponent from '../../UEditorComponent';
@@ -73,8 +73,9 @@ const ReportView: React.FC<{id:any,field:any,edit?:boolean,onChange?:Function}> 
     var par:any={id}
       par[field]=text
     if (id && field){
-      
+      setIsSaving(true)
       alterproreport(par).then((res:any)=>{
+        setIsSaving(false)
         if (res.errorMessage) {
           Modal.error({
             title: res.errorMessage,
@@ -91,7 +92,24 @@ const ReportView: React.FC<{id:any,field:any,edit?:boolean,onChange?:Function}> 
   
 
   return (
-    <div>
+    <>
+      {isSaving && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+        }}>
+          <Spin size="large" tip="保存中，请稍候..." />
+        </div>
+      )}
+      <div>
 
       {
         !edit && text &&
@@ -141,6 +159,7 @@ const ReportView: React.FC<{id:any,field:any,edit?:boolean,onChange?:Function}> 
         
       }
     </div>
+    </>
   )
 
 }

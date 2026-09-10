@@ -1,6 +1,7 @@
 
 <template>
   <div class="page">
+    
     <Tabs  class="mytab" style="margin-left: 0;padding-left: 0;"  v-model:active="active" type="card"   >
     <Tab   title="待审批">
       <List
@@ -14,13 +15,13 @@
 
         <listitem  :data="item"></listitem>
       </div>
-        
+
     </List>
 
     </Tab>
-    
 
-    
+
+
     <Tab title="回款">
       <List
         :loading="loading[3]"
@@ -33,7 +34,7 @@
 
         <listitem  :data="item"></listitem>
       </div>
-        
+
     </List>
 
     </Tab>
@@ -49,11 +50,25 @@
 
         <listitem  :data="item"></listitem>
       </div>
-        
+
     </List>
 
     </Tab>
     <Tab title="全部">
+      <div class="searchBox" >
+        <Field
+          v-model="keyword[1]"
+          size="normal"
+          center
+          clearable
+          style="padding:5px 5px 5px 15px;"
+          placeholder="搜索预算内容"
+        >
+        </Field>
+
+        <span class="btn" @click="onSearch(1)">搜索</span>
+      </div>
+
       <List
         :loading="loading[1]"
         :finished="finished[1]"
@@ -66,14 +81,14 @@
       </div>
     </List>
     </Tab>
-    
+
   </Tabs>
   </div>
 </template>
 <script  lang="ts">
 import { approvallist, debtlist, getprolist,history,paycollectionchecklist } from '@/views/budget/budget';
 import listitem from './components/listitem.vue';
-import { Tabs,Tab } from 'vant';
+import { Tabs,Tab,Field } from 'vant';
 import { List,Cell,Image } from 'vant';
 import Button from 'vant/lib/button';
 import { useUserStore } from '@/stores';
@@ -82,17 +97,18 @@ const cacheStore = useUserStore()
   export default {
     components: {
       Button,
-      Tabs,Tab,List,Cell,Image,listitem
+      Tabs,Tab,List,Cell,Image,Field,listitem
     },
     data () {
       return {
         active:0,
         refreshing:false,
+        keyword:['','','','',''],
         datas:<any>[[],[],[],[],[]],
         page:[0,0,0,0,0],
         loading:[false,false,false,false,false],
         finished:[false,false,false,false,false],
-        
+
       }
     },
     watch:{
@@ -111,6 +127,12 @@ const cacheStore = useUserStore()
       this.active = 0
     },
     methods:{
+      onSearch(tab:any){
+        this.datas[tab]=[]
+        this.page[tab]=0
+        this.finished[tab]=false
+        this.loaddata(tab)
+      },
       viewPayCollection(e:any){
         var q = {contractid:e.id}
         this.$router.push({name:'feibaoxitong_viewcollection',query:q})
@@ -133,26 +155,30 @@ const cacheStore = useUserStore()
       },
 
       async loaddata(index:number){
-        
+
         this.loading[index] = true;
         var current = this.page[index]+1
         var res:any = null
-        
+        var params = {pageSize:10,current}
+        if (this.keyword[index]) {
+          params['keyword'] = this.keyword[index]
+        }
+
         switch (index) {
           case 0:
-            res = await approvallist({pageSize:10,current})
+            res = await approvallist(params)
             break;
           case 1:
-            res = await getprolist({pageSize:10,current})
+            res = await getprolist(params)
             break
           case 2:
-            res = await history({pageSize:10,current})
+            res = await history(params)
             break
           case 3:
-            res = await paycollectionchecklist({pageSize:10,current})
+            res = await paycollectionchecklist(params)
             break
           case 4:
-            res = await debtlist({pageSize:10,current})
+            res = await debtlist(params)
             break
           default:
             break;

@@ -853,7 +853,7 @@ const Listc:React.FC = () =>{
               
               <Addinvoice key={refreshKey} invoicingid={0} url={'/api/invoicing/saveinvoice'} />
             </Modal>
-            <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+            <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null} width={500}>
               <OperationLog api={getoperationlogs} bizId={currentLogId} />
             </Modal>
             <EditCreatorButton ids={selectedIds} visible={batchModalVisible} onCancel={() => setBatchModalVisible(false)} onSave={() => { ref.current?.reload(); setSelectedIds(''); }} />

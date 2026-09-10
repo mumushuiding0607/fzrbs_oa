@@ -8,25 +8,38 @@ const OperationLog: React.FC<{
   bizId: string | number;
 }> = ({ api, bizId }) => {
   return (
-    <ProTable
-      scroll={{ x: 'max-content' }}
-      search={false}
-      rowKey="id"
-      size="small"
-      request={(params) => {
-        return api({
-          bizId,
-          current: params.current,
-          pageSize: params.pageSize,
-        }).then((res: any) => ({
-          data: res.data || [],
-          total: res.total || 0,
-          success: true,
-        }));
-      }}
-      columns={columns}
-      pagination={{ pageSize: 10 }}
-    />
+    <div style={{ width: '100%', overflowX: 'auto' }}>
+      <style>{`
+        .operation-log-remark table {
+          width: auto !important;
+          max-width: 100% !important;
+          overflow-x: visible !important;
+        }
+        .operation-log-remark table th,
+        .operation-log-remark table td {
+          white-space: pre-wrap !important;
+          word-break: break-word !important;
+        }
+      `}</style>
+      <ProTable
+        search={false}
+        rowKey="id"
+        size="small"
+        request={(params) => {
+          return api({
+            bizId,
+            current: params.current,
+            pageSize: params.pageSize,
+          }).then((res: any) => ({
+            data: res.data || [],
+            total: res.total || 0,
+            success: true,
+          }));
+        }}
+        columns={columns}
+        pagination={{ pageSize: 10 }}
+      />
+    </div>
   );
 };
 
@@ -60,15 +73,17 @@ const columns: ProColumns[] = [
     title: '变更内容',
     dataIndex: 'remark',
     key: 'remark',
+    className: 'operation-log-remark',
     render: (text: string) => {
       if (!text) return '';
-      // 移除 [contractID:xxx] [invoicingID:xxx] [budgetID:xxx] 前缀
-      let content = text.replace(/\[(contract|invoicing|budget)ID:\d+\]\s*/, '');
-      // 移除 合同【xxx】 或 开票申请【xxx】 等业务标识
-      content = content.replace(/合同【[^】]*】/, '');
-      content = content.replace(/开票申请【[^】]*】/, '');
-      content = content.replace(/非报项目【[^】]*】/, '');
-      return content.trim();
+      // 保留"变更内容："之后的内容
+      const match = text.match(/变更内容：([\s\S]*)$/);
+      const content = match ? match[1] : text;
+      return (
+        <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {content.trim()}
+        </div>
+      );
     },
   },
 ];

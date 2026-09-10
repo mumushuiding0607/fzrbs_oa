@@ -1081,7 +1081,7 @@ useEffect(()=>{
         <Print record={project} key={project.id}/>
       </Modal>
       <EditCreatorButton ids={selectedIds} visible={batchModalVisible} onCancel={() => setBatchModalVisible(false)} onSave={() => { actionRef.current?.reload(); setSelectedIds(''); }} />
-      <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null}>
+      <Modal title="变更记录" visible={logsModalVisible} onCancel={()=>setLogsModalVisible(false)} footer={null} width="80vw">
         <OperationLog key={currentLogId} api={getoperationlogs} bizId={currentLogId} />
       </Modal>
 

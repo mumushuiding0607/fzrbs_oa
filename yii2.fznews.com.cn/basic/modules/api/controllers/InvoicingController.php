@@ -412,8 +412,8 @@ class InvoicingController extends ApiBase{
     return $result;
   }
   public function actionSavecompany(){
-   
- 
+
+
     $obj = $this->_request;
     if ($this->_request['obj']){
       $obj = $this->_request['obj'];
@@ -422,10 +422,17 @@ class InvoicingController extends ApiBase{
     // 判断是否已经存在
     if (!$obj['company']) return array('errorMessage'=>'company不能为空');
 
-    
+
     try {
       $res = FzrbsCompany::find()->where(['and',['=','company',$obj['company']]])->one();
       if ($res) return array('errorMessage'=>"[".$obj['company']."]已经存在");
+      // 检查 code 是否已存在（排除自身）
+      if (!empty($obj['code'])) {
+        $existingByCode = FzrbsCompany::find()->andWhere(['=','code',$obj['code']])->one();
+        if ($existingByCode) {
+          return array('errorMessage'=>'code已存在，对应公司为【'.$existingByCode->company.'】，请你修改项目关联正确的公司，不要重复创建公司');
+        }
+      }
       $obj = new FzrbsCompany($obj);
       $obj->company = trim($obj->company);
       $obj->creator=$this->_adminInfo['wxuserid'];
@@ -433,7 +440,7 @@ class InvoicingController extends ApiBase{
     } catch (\Throwable $th) {
       return array('errorMessage'=>$th->getMessage());
     }
-    
+
     return array('data'=>$obj);
   }
   public function actionAddcontract(){
@@ -640,8 +647,14 @@ class InvoicingController extends ApiBase{
       $buyer = Yii::$app->db->createCommand("select id as SYS_DOCUMENTID, company as CUST_NAME from ".FzrbsCompany::tableName()." where company='".$buyerName."' order by id desc")->queryOne();
 
       if (!$buyer){
-        
-        Yii::$app->db->createCommand()->insert(FzrbsCompany::tableName(), array('company'=>$buyerName))->execute();
+        try {
+          Yii::$app->db->createCommand()->insert(FzrbsCompany::tableName(), array('company'=>$buyerName))->execute();
+        } catch (\Throwable $th) {
+          // 唯一键冲突，说明并发情况下已有记录，重新查询即可
+          if (strpos($th->getMessage(), 'Duplicate entry') === false) {
+            throw $th;
+          }
+        }
        $buyer = Yii::$app->db->createCommand("select id as SYS_DOCUMENTID, company as CUST_NAME from ".FzrbsCompany::tableName()." where company='".$buyerName."' order by id desc")->queryOne();
       }
       return $buyer;
@@ -1439,6 +1452,23 @@ class InvoicingController extends ApiBase{
     }else{
       $company->bankaccount = $bankname.' '.$bankaccount;
     }
+
+    // 保存前检查唯一性：如果 code 或 company 已存在于其他记录，则跳过保存
+    $code = !empty($infoFromInvoice['id']) ? $infoFromInvoice['id'] : null;
+    $name = !empty($infoFromInvoice['name']) ? $infoFromInvoice['name'] : null;
+    if ($code) {
+      $existingByCode = FzrbsCompany::find()->andWhere(['!=', 'id', $company->id])->andWhere(['code' => $code])->one();
+      if ($existingByCode) {
+        return; // code 已存在于其他记录，跳过
+      }
+    }
+    if ($name) {
+      $existingByName = FzrbsCompany::find()->andWhere(['!=', 'id', $company->id])->andWhere(['company' => $name])->one();
+      if ($existingByName) {
+        return; // company 已存在于其他记录，跳过
+      }
+    }
+
     $company->save();
 
 
@@ -3824,13 +3854,7 @@ public function actionStartflow(){
       $where[]=['or',['like','name',$keyword],['=','userid',$keyword]];
     }
     if ($deptId) {
-      // 查询指定部门及其子部门
-      $deptIds = [$deptId];
-      $childDepts = WeixinOaDepartment::find()->where(['parentid' => $deptId])->select('id')->column();
-      if ($childDepts) {
-        $deptIds = array_merge($deptIds, $childDepts);
-      }
-      $where[]=['in','departmentid',$deptIds];
+      $where[]=['=', 'departmentid', $deptId];
     }
     $limit = $this->_request['limit'];
     if(!$limit) $limit = 20;

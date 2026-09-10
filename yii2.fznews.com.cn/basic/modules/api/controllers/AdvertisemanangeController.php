@@ -1227,6 +1227,14 @@ class AdvertisemanangeController extends ApiBase{
                   return ['errorMessage' => '只有本人才能操作'];
               }
 
+              // 如果广告已平账，禁止修改客户名称
+              $amountReceivable = $existingAdvitem['AI_AmountReceivable'] ?? 0;
+              $balancedMoney = $existingAdvitem['AI_BalancedMoney'] ?? 0;
+              $isBalanced = ($balancedMoney >= $amountReceivable && $amountReceivable > 0);
+              if ($isBalanced && isset($obj['AI_Customer']) && $obj['AI_Customer'] != $existingAdvitem['AI_Customer']) {
+                  return ['errorMessage' => '该广告已平账，禁止修改客户名称'];
+              }
+
               // 审核员修改往期广告：检查修改次数和金额限制
               if (!$isCurrentMonth && $isAuditor) {
                   $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
@@ -1286,10 +1294,25 @@ class AdvertisemanangeController extends ApiBase{
 
               // 记录操作日志（对比变化）
               $changeDetails = [];
-              $compareFields = ['AI_Customer' => '客户', 'AI_AmountReceivable' => '应收金额', 'AI_PublishTime' => '发布日期', 'AI_Content' => '内容'];
+              $compareFields = [
+                  'AI_Customer' => '客户',
+                  'AI_AmountReceivable' => '应收金额',
+                  'AI_AmountPaid' => '已付金额',
+                  'AI_AmountReceived' => '已收金额',
+                  'AI_PublishTime' => '发布日期',
+                  'AI_PublishEndTime' => '结束日期',
+                  'AI_Content' => '内容',
+                  'AI_Size' => '规格',
+                  'AI_Color' => '颜色',
+                  'AI_Org' => '行业部门',
+                  'AI_Publication' => '刊物',
+                  'AI_Field' => '行业',
+                  'AI_Salesman' => '业务员',
+                  'AI_Trade' => '贸易类型',
+              ];
               foreach ($compareFields as $field => $label) {
-                  if (isset($obj[$field]) && isset($existingAdvitem[$field]) && $obj[$field] != $existingAdvitem[$field]) {
-                      $oldVal = $existingAdvitem[$field];
+                  if (isset($obj[$field]) && array_key_exists($field, $existingAdvitem) && (string)$obj[$field] !== (string)$existingAdvitem[$field]) {
+                      $oldVal = $existingAdvitem[$field] ?? '';
                       $newVal = $obj[$field];
                       // 日期格式化为年月日
                       if ($field === 'AI_PublishTime') {
@@ -1297,6 +1320,17 @@ class AdvertisemanangeController extends ApiBase{
                           $newVal = substr($newVal, 0, 10);
                       }
                       $changeDetails[] = $label . '由【' . $oldVal . '】变为【' . $newVal . '】';
+                  }
+              }
+              // 对比合同变更（合同字段在订单表中）
+              if (!empty($obj['AI_OrderID'])) {
+                  $existingOrderSql = "SELECT contractid, contractserial FROM advorder WHERE SYS_DOCUMENTID = :orderId";
+                  $existingOrder = Yii::$app->paymentdb->createCommand($existingOrderSql)->bindValues([':orderId' => $obj['AI_OrderID']])->queryOne();
+                  if ($existingOrder) {
+                      // 对比合同编号
+                      if (!empty($obj['contractserial']) && isset($existingOrder['contractserial']) && $obj['contractserial'] != $existingOrder['contractserial']) {
+                          $changeDetails[] = '合同编号由【' . ($existingOrder['contractserial'] ?? '') . '】变为【' . $obj['contractserial'] . '】';
+                      }
                   }
               }
               $changeText = empty($changeDetails) ? '广告内容变更' : implode('，', $changeDetails);
@@ -1423,14 +1457,28 @@ class AdvertisemanangeController extends ApiBase{
               return ['errorMessage' => '该广告已有回款，无法删除'];
           }
 
-          // 已审广告(SYS_DELETEFLAG=0)禁止删除
-          if ($advitem['SYS_DELETEFLAG'] == 0) {
+          // 检查广告是否已平账
+          $balancedMoney = floatval($advitem['AI_BalancedMoney'] ?? 0);
+          if ($balancedMoney > 0) {
+              return ['errorMessage' => '该广告已平账，无法删除'];
+          }
+
+          // 检查广告是否已开票
+          $invoicedMoney = floatval($advitem['AI_InvoicedMoney'] ?? 0);
+          if ($invoicedMoney > 0) {
+              return ['errorMessage' => '该广告已开票，无法删除'];
+          }
+
+          // 已审广告(SYS_DELETEFLAG=0)禁止删除，小额订单(AI_Type==2)除外
+          if ($advitem['SYS_DELETEFLAG'] == 0 && $advitem['AI_Type'] != 2) {
               return ['errorMessage' => '已审批的广告无法删除'];
           }
 
           // 检查是否是当月订单（根据AI_PublishTime判断）
-          if (!$this->isCurrentMonth($advitem['AI_PublishTime'])) {
-              return ['errorMessage' => '只能删除当月的广告'];
+          $isCurrentMonth = $this->isCurrentMonth($advitem['AI_PublishTime']);
+          $isAuditor = $this->checkRole('广告审核');
+          if (!$isCurrentMonth && !$isAuditor) {
+              return ['errorMessage' => '只能删除当月的广告，非当月广告需要广告审核权限'];
           }
 
           // 检查广告是否有已通过的审批流程（advitem单独审批）
@@ -1675,11 +1723,11 @@ class AdvertisemanangeController extends ApiBase{
               } else {
                   // 检查是否只修改了附件或合同字段
                   $advitemId = $obj['SYS_DOCUMENTID'];
-                  $checkAdvitemSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
+                  $checkAdvitemSql = "SELECT advitem.*, advorder.contractserial FROM advitem LEFT JOIN advorder ON advitem.AI_OrderID = advorder.SYS_DOCUMENTID WHERE advitem.SYS_DOCUMENTID = :id";
                   $existingAdvitem = Yii::$app->paymentdb->createCommand($checkAdvitemSql)->bindValues([':id' => $advitemId])->queryOne();
                   $fileurlsChanged = isset($obj['fileurls']) && $existingAdvitem['fileurls'] != $obj['fileurls'];
                   $existingContractid = isset($existingOrder['contractid']) ? $existingOrder['contractid'] : '';
-                  $existingContractserial = isset($existingOrder['contractserial']) ? $existingOrder['contractserial'] : '';
+                  $existingContractserial = $existingAdvitem['contractserial'] ?? '';
                   $contractidChanged = isset($objContractid) && $existingContractid != $objContractid;
                   $contractserialChanged = isset($objContractserial) && $existingContractserial != $objContractserial;
                   $onlyFileOrContractChanged = ($fileurlsChanged || $contractidChanged || $contractserialChanged);
@@ -1723,6 +1771,14 @@ class AdvertisemanangeController extends ApiBase{
                       return ['errorMessage' => '只有本人才能操作'];
                   }
 
+                  // 如果广告已平账，禁止修改客户名称
+                  $amountReceivable = $existingAdvitem['AI_AmountReceivable'] ?? 0;
+                  $balancedMoney = $existingAdvitem['AI_BalancedMoney'] ?? 0;
+                  $isBalanced = ($balancedMoney >= $amountReceivable && $amountReceivable > 0);
+                  if ($isBalanced && isset($obj['AI_Customer']) && $obj['AI_Customer'] != $existingAdvitem['AI_Customer']) {
+                      return ['errorMessage' => '该广告已平账，禁止修改客户名称'];
+                  }
+
                   // 审核员修改往期广告：检查修改次数和金额限制（如果只修改附件或合同则跳过）
                   if (!$onlyFileOrContractChanged && !$isCurrentMonth && $isAuditor) {
                       $checkModifySql = "SELECT COUNT(*) as cnt FROM fzrbs_operation_log WHERE catalog = '修改广告' AND userid = :userid AND remark LIKE :remark";
@@ -1747,11 +1803,29 @@ class AdvertisemanangeController extends ApiBase{
                   Yii::$app->paymentdb->createCommand()->update('advitem', $updateFields, 'SYS_DOCUMENTID = :id', [':id' => $advitemId])->execute();
 
                   // 记录操作日志（对比变化）
+                  // 把 contractserial 添加回 $obj 以便对比（之前被 unset 了）
+                  $obj['contractserial'] = $objContractserial;
                   $changeDetails = [];
-                  $compareFields = ['AI_Customer' => '客户', 'AI_AmountReceivable' => '应收金额', 'AI_PublishTime' => '发布日期', 'AI_Content' => '内容'];
+                  $compareFields = [
+                      'AI_Customer' => '客户',
+                      'AI_AmountReceivable' => '应收金额',
+                      'AI_AmountPaid' => '已付金额',
+                      'AI_AmountReceived' => '已收金额',
+                      'AI_PublishTime' => '发布日期',
+                      'AI_PublishEndTime' => '结束日期',
+                      'AI_Content' => '内容',
+                      'AI_Size' => '规格',
+                      'AI_Color' => '颜色',
+                      'AI_Org' => '行业部门',
+                      'AI_Publication' => '刊物',
+                      'AI_Field' => '行业',
+                      'AI_Salesman' => '业务员',
+                      'AI_Trade' => '贸易类型',
+                      'contractserial' => '合同编号',
+                  ];
                   foreach ($compareFields as $field => $label) {
-                      if (isset($obj[$field]) && isset($existingAdvitem[$field]) && $obj[$field] != $existingAdvitem[$field]) {
-                          $oldVal = $existingAdvitem[$field];
+                      if (isset($obj[$field]) && array_key_exists($field, $existingAdvitem) && (string)$obj[$field] !== (string)$existingAdvitem[$field]) {
+                          $oldVal = $existingAdvitem[$field] ?? '';
                           $newVal = $obj[$field];
                           // 日期格式化为年月日
                           if ($field === 'AI_PublishTime') {
@@ -1761,6 +1835,8 @@ class AdvertisemanangeController extends ApiBase{
                           $changeDetails[] = $label . '由【' . $oldVal . '】变为【' . $newVal . '】';
                       }
                   }
+               
+                  
                   $changeText = empty($changeDetails) ? '广告内容变更' : implode('，', $changeDetails);
                   $this->_operationlog([
                       'catalog' => '修改广告',
@@ -1921,7 +1997,7 @@ class AdvertisemanangeController extends ApiBase{
                }
            }
 
-           // 合作内容(AI_Content)使用中文分号分割并换行
+           // 合作内容(AI_Content)使用中文分号分割并换行，相同内容只输出一次
            $contents = [];
            foreach ($advitems as $item) {
                if (isset($item['AI_Content']) && $item['AI_Content'] !== '' && $item['AI_Content'] !== null) {
@@ -1929,7 +2005,7 @@ class AdvertisemanangeController extends ApiBase{
                }
            }
            if (!empty($contents)) {
-               $merged['AI_Content'] = implode("；\n", $contents);
+               $merged['AI_Content'] = implode("；\n", array_unique($contents));
            } else {
                $merged['AI_Content'] = '';
            }

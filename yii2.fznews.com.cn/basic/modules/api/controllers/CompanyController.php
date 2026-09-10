@@ -114,17 +114,31 @@ class CompanyController extends ApiBase{
           $res = FzrbsCompany::find()->where(['and',['=','company',$obj['company']]])->one();
           if ($res) return array('errorMessage'=>"[".$obj['company']."]已经存在");
           // 去掉空格
-          
+
         }
-   
+        // 检查 code 是否已存在于其他记录（排除自身）
+        if (!empty($obj['code']) && $old['code'] != $obj['code']) {
+          $existingByCode = FzrbsCompany::find()->andWhere(['!=','id',$obj['id']])->andWhere(['=','code',$obj['code']])->one();
+          if ($existingByCode) {
+            return array('errorMessage'=>'code已存在，对应公司为【'.$existingByCode->company.'】，请你修改项目关联正确的公司，不要重复创建公司');
+          }
+        }
+
         FzrbsCompany::updateAll($obj,['id'=>$obj['id']]);
       } else {
         $res = FzrbsCompany::find()->where(['and',['=','company',$obj['company']]])->one();
         if ($res) return array('errorMessage'=>"[".$obj['company']."]已经存在");
+        // 检查 code 是否已存在
+        if (!empty($obj['code'])) {
+          $existingByCode = FzrbsCompany::find()->andWhere(['=','code',$obj['code']])->one();
+          if ($existingByCode) {
+            return array('errorMessage'=>'code已存在，对应公司为【'.$existingByCode->company.'】，请你修改项目关联正确的公司，不要重复创建公司');
+          }
+        }
         $obj = new FzrbsCompany($obj);
         // company字段空格全部去掉
         $obj->company = str_replace(' ','',$obj->company);
-  
+
         $obj->creator=$this->_adminInfo['wxuserid'];
         $obj->save();
       }

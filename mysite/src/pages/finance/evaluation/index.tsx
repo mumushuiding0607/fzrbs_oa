@@ -50,6 +50,8 @@ const getLastQuarter = () => {
 
 const EvaluationIndex: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const proTableFormRef = useRef<any>();
+  const [params, setParams] = useState<Record<string, any>>({});
 
   const [viewModalVisible, setViewModalVisible] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<number | null>(null);
@@ -313,13 +315,34 @@ const EvaluationIndex: React.FC = () => {
       dataIndex: 'year',
       key: 'year',
       width: 80,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '选择年份',
+      },
+      valueEnum: {
+        2024: '2024',
+        2025: '2025',
+        2026: '2026',
+      },
+      hideInTable: true,
     },
     {
       title: '季度',
       dataIndex: 'quarter',
       key: 'quarter',
       width: 80,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '选择季度',
+      },
+      valueEnum: {
+        1: 'Q1',
+        2: 'Q2',
+        3: 'Q3',
+        4: 'Q4',
+      },
       render: (val: number) => `Q${val}`,
+      hideInTable: true,
     },
     {
       title: '评分人',
@@ -327,12 +350,22 @@ const EvaluationIndex: React.FC = () => {
       key: 'scorer_name',
       width: 100,
       render: (val: string) => val || '-',
+      fieldProps: { placeholder: '输入评分人姓名' },
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 100,
+      valueType: 'select',
+      fieldProps: {
+        placeholder: '选择状态',
+      },
+      valueEnum: {
+        0: '未评分',
+        1: '已评分',
+        2: '超时默认95',
+      },
       render: (val: number) => {
         if (val === 0) return <Tag>未评分</Tag>;
         if (val === 1) return <Tag color="green">已评分</Tag>;
@@ -399,11 +432,22 @@ const EvaluationIndex: React.FC = () => {
       <Card title="评分任务列表">
         <ProTable
           actionRef={actionRef}
-          search={false}
+          formRef={proTableFormRef}
+          params={params}
+          search={{
+            labelWidth: 120,
+          }}
           rowKey="id"
-          request={async (params) => {
+          request={async (params: any, sorter: any, filter: any) => {
             try {
-              const res: any = await getTasks({});
+              const res: any = await getTasks({
+                keyword: params.scorer_name,
+                year: params.year,
+                quarter: params.quarter,
+                status: params.status,
+                current: params.current,
+                pageSize: params.pageSize,
+              });
               if (res.message) {
                 message.error(res.message);
                 return {

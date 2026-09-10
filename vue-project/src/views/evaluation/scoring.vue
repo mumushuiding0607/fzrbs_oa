@@ -76,9 +76,10 @@
         round
         :loading="submitting"
         :disabled="!canSubmitAll"
+        class="submit-btn-text"
         @click="handleSubmitAll"
       >
-        提交全部评分 ({{ pendingCount }}项)
+        提交全部评分
       </van-button>
     </div>
 
@@ -88,11 +89,17 @@
       :task-id="personalScoreModal.taskId"
       :dept-id="personalScoreModal.deptId"
       :dept-name="personalScoreModal.deptName"
-      :score-options="scoreOptions"
       :edit-data="personalScoreModal.editData"
       @close="personalScoreModal.show = false"
       @success="handlePersonalScoreSuccess"
       @delete="handlePersonalScoreDelete"
+    />
+
+    <!-- Evaluation Guide Modal -->
+    <EvaluationGuideModal
+      :show="guideModal.show"
+      :content="guideContent"
+      @close="guideModal.show = false"
     />
   </div>
 </template>
@@ -102,6 +109,7 @@ import { NavBar, Empty, Button, Cell, CellGroup, Tag, List, showToast, showLoadi
 import { getTasks, getTaskDetail, getConfig, batchSubmitScore, submitPersonalScore, deletePersonalScore } from '@/views/evaluation/api/evaluation'
 import ScoreModule from './components/ScoreModule.vue'
 import PersonalScoreModal from './components/PersonalScoreModal.vue'
+import EvaluationGuideModal from './components/EvaluationGuideModal.vue'
 
 export default {
   name: 'EvaluationScoring',
@@ -115,6 +123,7 @@ export default {
     vanList: List,
     ScoreModule,
     PersonalScoreModal,
+    EvaluationGuideModal,
   },
   data() {
     return {
@@ -145,6 +154,12 @@ export default {
         deptName: '',
         editData: null as any,
       },
+      // Evaluation guide modal state
+      guideModal: {
+        show: false,
+      },
+      guideContent: '',
+      guideShownKey: '', // 用于记录已显示过的 task_id
     }
   },
   computed: {
@@ -158,14 +173,13 @@ export default {
       return Object.keys(this.scoreDrafts).length
     },
     canSubmitAll() {
-      // All drafts must have a score selected
-      return (Object.values(this.scoreDrafts) as any[]).every((draft: any) => draft.score > 0)
+      // 有任务且有部门需要评分
+      return this.taskList.length > 0 && (this.taskList[0]?.departments?.length ?? 0) > 0
     },
     navTitle() {
       if (this.taskList.length > 0) {
         const task = this.taskList[0]
-        const done = task.departments.filter((d: any) => d.status).length
-        return `${task.year}年第${task.quarter}季度（${done}/${task.departments.length}）`
+        return `${task.year}年第${task.quarter}季度`
       }
       return '服务对象评价'
     }
@@ -193,9 +207,10 @@ export default {
       try {
         // If task_id is provided via query, load task detail directly
         if (this.taskId) {
-          const [detailRes, configRes] = await Promise.all([
+          const [detailRes, configRes, guideRes] = await Promise.all([
             getTaskDetail({ task_id: Number(this.taskId) }),
-            getConfig({ type: '评分档次' })
+            getConfig({ type: '评分档次' }),
+            getConfig({ type: '社直部门考评说明' })
           ])
 
           if (detailRes && detailRes.data) {
@@ -210,6 +225,21 @@ export default {
               })
             }
             this.finished = true
+
+            // 检查是否未评分，显示考评说明弹窗
+            const hasUnscored = detailRes.data.departments?.some((d: any) => !d.status)
+            if (hasUnscored && this.guideShownKey !== String(this.taskId)) {
+              if (guideRes && guideRes.data && guideRes.data['社直部门考评说明']) {
+                const guideData = guideRes.data['社直部门考评说明']
+                if (guideData.length > 0) {
+                  this.guideContent = guideData[0].label || ''
+                  if (this.guideContent) {
+                    this.guideModal.show = true
+                    this.guideShownKey = String(this.taskId)
+                  }
+                }
+              }
+            }
           } else {
             showToast('任务不存在')
             this.finished = true
@@ -366,8 +396,8 @@ export default {
     },
 
     async handleSubmitAll() {
-      if (!this.canSubmitAll) {
-        showToast('请为所有部门选择评分')
+      if (this.taskList.length === 0) {
+        showToast('暂无可提交的任务')
         return
       }
 
@@ -375,23 +405,19 @@ export default {
       showLoadingToast({ message: '提交中...', forbidClick: true })
 
       try {
-        // 收集所有部门的评分
-        const scores = Object.values(this.scoreDrafts).map((draft: any) => ({
-          dept_id: draft.deptId,
-          score: draft.score,
-          opinion: draft.opinion || ''
-        }))
+        const task = this.taskList[0]
+        const taskId = task.task_id
 
-        // 获取 task_id（从第一个 draft）
-        const firstDraft = Object.values(this.scoreDrafts)[0] as any
-        const taskId = firstDraft?.taskId
-
-        if (!taskId) {
-          closeToast()
-          showToast('任务ID无效')
-          this.submitting = false
-          return
-        }
+        // 收集所有部门的评分（用户改了就用改后的，否则默认95分）
+        const scores = task.departments.map((dept: any) => {
+          const key = String(dept.dept_id)
+          const draft = this.scoreDrafts[key]
+          return {
+            dept_id: dept.dept_id,
+            score: draft ? draft.score : 95, // 默认非常满意95
+            opinion: draft ? draft.opinion || '' : ''
+          }
+        })
 
         const res: any = await batchSubmitScore({
           task_id: taskId,
@@ -399,25 +425,22 @@ export default {
         })
 
         closeToast()
-       
-        if (res && !res.message) {
-     
-          showToast({ message: `提交成功 (${Object.keys(this.scoreDrafts).length}项)`, duration: 1500 })
-          this.scoreDrafts = {}
-          this.loadData()
-        } else if (res?.message) {
 
+        if (res && !res.message) {
+          showToast({ message: `提交成功 (${scores.length}项)`, duration: 1500 })
+          this.scoreDrafts = {}
+          // 跳转到评分历史tab
+          setTimeout(() => {
+            this.$router.replace({ name: 'evaluation_index', query: { active: '1' } })
+          }, 1500)
+        } else if (res?.message) {
           const msg = String(res.message)
-          showDialog({
-            title: msg,
-          })
-    
+          showDialog({ title: msg })
         } else {
-      
           showToast('提交失败')
         }
       } catch (e) {
-       
+        closeToast()
       }
 
       this.submitting = false
@@ -458,5 +481,9 @@ export default {
   background: #fff;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
   z-index: 100;
+}
+
+:deep(.submit-btn-text .van-button__text) {
+  font-size: calc(var(--van-cell-font-size) * 1.15) !important;
 }
 </style>

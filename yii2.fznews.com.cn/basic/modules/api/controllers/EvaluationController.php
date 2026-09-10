@@ -84,6 +84,7 @@ class EvaluationController extends ApiBase
             $result[$config->type][] = [
                 'label' => $config->label,
                 'value' => $config->value,
+                'description' => $config->description ?? '',
             ];
         }
 
@@ -127,23 +128,38 @@ class EvaluationController extends ApiBase
      */
     public function actionGettasks()
     {
-        $scorerId = $this->_adminInfo->wxuserid ?? Yii::$app->request->post('wxuserid');
-        $page = Yii::$app->request->post('current', 1);
-        $pageSize = Yii::$app->request->post('pageSize', 20);
-        $status = Yii::$app->request->post('status');
+        $scorerId = $this->_adminInfo->wxuserid ?? ($this->_request['wxuserid'] ?? null);
+        $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
+        $pageSize = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
+        $year = $this->_request['year'] ?? null;
+        $quarter = $this->_request['quarter'] ?? null;
+        $status = $this->_request['status'] ?? null;
+        $keyword = $this->_request['keyword'] ?? null;
         $offset = ($page - 1) * $pageSize;
 
         $query = FzrbsEvaluationTask::find()
             ->select(['fzrbs_evaluation_task.*', 'u.name as scorer_name'])
             ->leftJoin([WeixinOAUserInfo::tableName() . ' u'], 'u.userid = fzrbs_evaluation_task.scorer_id')
-            ->orderBy('fzrbs_evaluation_task.created_at desc');
+            ->orderBy('fzrbs_evaluation_task.id desc');
 
         if (!empty($scorerId)) {
             $query->andWhere(['scorer_id' => $scorerId]);
         }
 
+        if ($year !== null && $year !== '') {
+            $query->andWhere(['fzrbs_evaluation_task.year' => intval($year)]);
+        }
+
+        if ($quarter !== null && $quarter !== '') {
+            $query->andWhere(['fzrbs_evaluation_task.quarter' => intval($quarter)]);
+        }
+
         if ($status !== null && $status !== '') {
             $query->andWhere(['fzrbs_evaluation_task.status' => intval($status)]);
+        }
+
+        if (!empty($keyword)) {
+            $query->andWhere(['like', 'u.name', $keyword]);
         }
 
         $total = $query->count();
@@ -348,6 +364,24 @@ class EvaluationController extends ApiBase
         }
         $deptIds = explode(',', $deptConfig['dept']);
 
+        // 查询部门并按order字段降序排序
+        $deptOrderMap = [];
+        $deptsWithOrder = WeixinOaDepartment::find()
+            ->where(['id' => $deptIds])
+            ->orderBy('`order` desc')
+            ->asArray()
+            ->all();
+        foreach ($deptsWithOrder as $dept) {
+            $deptOrderMap[$dept['id']] = $dept['order'] ?? 0;
+        }
+
+        // 按order降序排列部门IDs
+        usort($deptIds, function($a, $b) use ($deptOrderMap) {
+            $orderA = $deptOrderMap[$a] ?? 0;
+            $orderB = $deptOrderMap[$b] ?? 0;
+            return $orderB - $orderA;
+        });
+
         // 检查"部门考评人"角色是否存在
         $roleId = WeixinOaRole::find()->where(['rolename' => '部门考评人'])->select('id')->scalar();
         if (!$roleId) {
@@ -388,6 +422,17 @@ class EvaluationController extends ApiBase
                     continue;
                 }
 
+                // 过滤掉评分人自己所在的部门
+                $userDeptId = $evaluator['departmentid'];
+                $targetDeptIds = array_filter($deptIds, function($deptId) use ($userDeptId) {
+                    return $deptId != $userDeptId;
+                });
+
+                // 如果没有可评分的部门，跳过
+                if (empty($targetDeptIds)) {
+                    continue;
+                }
+
                 // 创建任务
                 $task = new FzrbsEvaluationTask();
                 $task->year = $year;
@@ -395,7 +440,7 @@ class EvaluationController extends ApiBase
                 $task->start_date = $startDate;
                 $task->end_date = $endDate;
                 $task->scorer_id = $evaluator['userid'];
-                $task->dept_ids = implode(',', $deptIds);
+                $task->dept_ids = implode(',', $targetDeptIds);
                 $task->status = 0;
                 $task->created_at = date('Y-m-d H:i:s');
 
@@ -434,7 +479,7 @@ class EvaluationController extends ApiBase
     {
         if (empty($notifyUsers)) return;
 
-        $content = "您有{$year}年第{$quarter}季度考评任务待完成，请使用[掌上福州->社直部门考评]及时评分。";
+        $content = "您有{$year}年第{$quarter}季度考评任务待完成，请于10号前及时评分，逾期未评将默认非常满意。请使用[掌上福州->社直部门考评]进行评分。";
         $touser = implode('|', array_column($notifyUsers, 'userid'));
         WxQyhJk::sendMessage($this->agentId, $touser, $content, 'text');
     }
@@ -622,11 +667,6 @@ class EvaluationController extends ApiBase
             return ['message' => '该部门不在考评范围内'];
         }
 
-        // 部门评分已提交则禁止修改个人评分
-        if ($this->_isDeptScoreSubmitted($taskId, $deptId)) {
-            return ['message' => '该部门评分已提交，无法修改个人评分'];
-        }
-
         // 10号之后禁止修改评分
         if ($deadlineError = $this->_checkDeadline()) {
             return $deadlineError;
@@ -695,11 +735,6 @@ class EvaluationController extends ApiBase
             return ['message' => '评分记录不存在'];
         }
 
-        // 部门评分已提交则禁止删除个人评分
-        if ($this->_isDeptScoreSubmitted($scoreRecord->task_id, $scoreRecord->dept_id)) {
-            return ['message' => '该部门评分已提交，无法删除个人评分'];
-        }
-
         // 10号之后禁止删除个人评分
         if ($deadlineError = $this->_checkDeadline('删除')) {
             return $deadlineError;
@@ -745,11 +780,6 @@ class EvaluationController extends ApiBase
         $task = FzrbsEvaluationTask::findOne($taskId);
         if (!$task) {
             return ['message' => '任务不存在'];
-        }
-
-        // 部门评分已提交则禁止再次修改
-        if ($this->_isDeptScoreSubmitted($taskId, $deptId)) {
-            return ['message' => '该部门评分已提交，无法修改'];
         }
 
         // 10号之后禁止修改评分
@@ -1557,7 +1587,7 @@ class EvaluationController extends ApiBase
         $deptScoreSum = [];
         $deptScoreCount = [];
         foreach ($mainScores as $score) {
-            $deptId = $score['dept_id'];
+            $deptId = strval($score['dept_id']);
             if (!isset($deptScoreSum[$deptId])) {
                 $deptScoreSum[$deptId] = 0;
                 $deptScoreCount[$deptId] = 0;
@@ -1567,7 +1597,7 @@ class EvaluationController extends ApiBase
         }
         $deptAvgScores = [];
         foreach ($departments as $dept) {
-            $deptId = $dept['id'];
+            $deptId = strval($dept['id']);
             $avgScore = ($deptScoreCount[$deptId] ?? 0) > 0
                 ? round($deptScoreSum[$deptId] / $deptScoreCount[$deptId], 1)
                 : null;
@@ -1727,7 +1757,7 @@ class EvaluationController extends ApiBase
         $deptScoreSum = [];
         $deptScoreCount = [];
         foreach ($mainScores as $score) {
-            $deptId = $score['dept_id'];
+            $deptId = strval($score['dept_id']);
             if (!isset($deptScoreSum[$deptId])) {
                 $deptScoreSum[$deptId] = 0;
                 $deptScoreCount[$deptId] = 0;
@@ -1737,7 +1767,7 @@ class EvaluationController extends ApiBase
         }
         $deptAvgScores = [];
         foreach ($departments as $dept) {
-            $deptId = $dept['id'];
+            $deptId = strval($dept['id']);
             $avgScore = ($deptScoreCount[$deptId] ?? 0) > 0
                 ? round($deptScoreSum[$deptId] / $deptScoreCount[$deptId], 1)
                 : null;
@@ -1881,16 +1911,6 @@ class EvaluationController extends ApiBase
             return ['message' => "每月10日之后无法{$action}评分"];
         }
         return null;
-    }
-
-    /**
-     * 检查部门评分是否已提交
-     */
-    protected function _isDeptScoreSubmitted($taskId, $deptId)
-    {
-        return FzrbsEvaluationScore::find()
-            ->where(['task_id' => $taskId, 'dept_id' => $deptId])
-            ->exists();
     }
 
     /**

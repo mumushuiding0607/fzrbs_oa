@@ -32,7 +32,7 @@
 
 /* tab */
 .mytab .van-tab--card {
-        color: #666;
+        color: #666!important;
         background-color: white;
         border: none;
         font-size: calc(var(--van-cell-font-size)*var(--big))!important;

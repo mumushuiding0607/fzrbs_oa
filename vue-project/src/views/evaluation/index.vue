@@ -57,6 +57,13 @@ export default {
       selectQuarter: Math.ceil((new Date().getMonth() + 1) / 3),
     }
   },
+  created() {
+    // 从URL参数读取active tab
+    const activeParam = this.$route.query.active
+    if (activeParam !== undefined) {
+      this.active = Number(activeParam)
+    }
+  },
   methods: {
     formatDate(dateStr: string) {
       if (!dateStr) return '-'
@@ -145,9 +152,10 @@ export default {
   font-size: 16px;
 }
 
-:deep(.van-tab--active) {
-  color: #0ea5e9;
-  font-weight: 600;
+.mytab .van-tab--card.van-tab--active {
+  background-color: #F1F1F1 !important;
+  color: #1a1a1a !important;
+  font-weight: 600 !important;
 }
 
 :deep(.van-tabs__nav--card) {
