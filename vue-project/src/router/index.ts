@@ -540,6 +540,47 @@ const router = createRouter({
         requiresLogin: false,
       }
     },
+    // 月度考核
+    {
+      path: '/yxkh/index',
+      name: 'yxkh_index',
+      component: () => import('../views/yxkh/index.vue'),
+      meta: {
+        title: '月度考核',
+        keepAlive: true,
+        requiresLogin: true,
+      }
+    },
+    {
+      path: '/yxkh/view',
+      name: 'yxkh_view',
+      component: () => import('../views/yxkh/view.vue'),
+      meta: {
+        title: '月度考核详情',
+        keepAlive: false,
+        requiresLogin: true,
+      }
+    },
+    {
+      path: '/yxkh/add',
+      name: 'yxkh_add',
+      component: () => import('../views/yxkh/add.vue'),
+      meta: {
+        title: '发起月度考核',
+        keepAlive: false,
+        requiresLogin: true,
+      }
+    },
+    {
+      path: '/yxkh/preview',
+      name: 'yxkh_preview',
+      component: () => import('../views/yxkh/preview.vue'),
+      meta: {
+        title: '提交预览',
+        keepAlive: false,
+        requiresLogin: true,
+      }
+    },
   ]
 })
 

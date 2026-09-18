@@ -99,8 +99,6 @@ export default {
 
       try {
         const res: any = await getTasks({
-          year: this.selectYear,
-          quarter: this.selectQuarter,
           status,
           pageSize: 20,
           current,

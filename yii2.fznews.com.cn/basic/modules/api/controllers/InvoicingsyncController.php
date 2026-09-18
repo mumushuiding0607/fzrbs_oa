@@ -1506,5 +1506,190 @@ private function escape($string)
       }
       return $tree;
   }
-    
+
+  public function actionExportxml(){
+    // 支持GET query params和POST form data
+    $getParams = Yii::$app->request->queryParams;
+    $postParams = Yii::$app->request->isPost ? Yii::$app->request->post() : [];
+    $this->_request = array_merge($getParams, $postParams);
+
+    $where = [
+        'and',
+        ['>', 'i.id', 0],
+    ];
+
+    // 检查是否有至少一个查询参数
+    $EIid = isset($this->_request['EIid']) ? trim($this->_request['EIid']) : '';
+    if (empty($this->_request['publication']) &&
+        empty($EIid) &&
+        empty($this->_request['seller']) &&
+        empty($this->_request['RequestTimeStart']) &&
+        empty($this->_request['RequestTimeEnd']) &&
+        empty($this->_request['businesstype']) &&
+        empty($this->_request['keyword']) &&
+        empty($this->_request['month']) &&
+        !isset($this->_request['pushed'])) {
+        echo json_encode(['errorMessage' => '请至少选择一个查询条件'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    if (!empty($this->_request['publication'])){
+      $where[] = ['in', 'i.publication', explode(',', $this->_request['publication'])];
+    }
+    if (!empty($EIid)){
+      $where[] = ['like', 'i.EIid', $EIid];
+    }
+    if (!empty($this->_request['seller'])){
+      $where[] = ['like', 'i.SellerName', $this->_request['seller']];
+    }
+    if (!empty($this->_request['RequestTimeStart'])){
+      $where[] = ['>=', 'i.RequestTime', $this->_request['RequestTimeStart']];
+    }
+    if (!empty($this->_request['RequestTimeEnd'])){
+      $where[] = ['<=', 'i.RequestTime', $this->_request['RequestTimeEnd']];
+    }
+    if (!empty($this->_request['businesstype'])){
+      $where[] = ['=', 'i.businesstype', $this->_request['businesstype']];
+    }
+    if (!empty($this->_request['keyword'])) {
+      $where[] = ['or',
+        ['like', 'i.EIid', $this->_request['keyword']],
+        ['like', 'i.BuyerName', $this->_request['keyword']],
+        ['like', 'i.SellerName', $this->_request['keyword']]
+      ];
+    }
+    if (isset($this->_request['pushed'])){
+      $where[] = ['pushed' => $this->_request['pushed']];
+    }
+
+    // month参数，如month=2024-01
+    if (!empty($this->_request['month'])) {
+      $month = trim($this->_request['month']);
+      if (preg_match('/^\d{4}-\d{2}$/', $month)) {
+        $nextMonth = date('Y-m-d', strtotime($month . '-01 +1 month'));
+        $where[] = ['>=', 'i.RequestTime', $month . '-01'];
+        $where[] = ['<', 'i.RequestTime', $nextMonth];
+      }
+    }
+
+    // 红冲过滤
+    $includeRed = isset($this->_request['includeRed']) ? intval($this->_request['includeRed']) : 1;
+    if ($includeRed == 0) {
+      $where[] = ['>', 'i.TotalTaxIncludedAmount', 0];
+    }
+
+    $model = FzrbsInvoice::find()->alias('i')
+      ->select('i.*, u.name as handler')
+      ->leftJoin(['inv' => FzrbsInvoicing::tableName()], 'i.invoicingid = inv.id')
+      ->leftJoin(['u' => WeixinOAUserInfo::tableName()], 'inv.creator = u.userid')
+      ->where($where)->orderBy('id desc');
+    $invoices = $model->asArray()->all();
+
+    if (empty($invoices)) {
+      echo json_encode(['errorMessage' => '没有找到符合条件的发票'], JSON_UNESCAPED_UNICODE);
+      exit;
+    }
+
+    // 如果type不是xml，默认返回JSON数组
+    $type = isset($this->_request['type']) ? strtolower(trim($this->_request['type'])) : 'json';
+    if ($type !== 'xml') {
+      echo json_encode(['data' => $invoices, 'total' => count($invoices)], JSON_UNESCAPED_UNICODE);
+      exit;
+    }
+
+    if (count($invoices) == 1) {
+      // 单个发票返回XML
+      $invoice = $invoices[0];
+      $items = FzrbsInvoiceItem::find()->where(['invoiceid' => $invoice['id']])->asArray()->all();
+      $xml = $this->generateInvoiceXml($invoice, $items);
+      Yii::$app->response->format = \yii\web\Response::FORMAT_RAW;
+      Yii::$app->response->headers->set('Content-Type', 'application/xml; charset=utf-8');
+      $filename = '发票_' . $invoice['EIid'] . '_' . $invoice['BuyerName'] . '.xml';
+      Yii::$app->response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
+      return $xml;
+    } else {
+      // 多个发票返回ZIP
+      $zip = new \ZipArchive();
+      $tmpFile = tempnam(sys_get_temp_dir(), 'invoice_') . '.zip';
+
+      if ($zip->open($tmpFile, \ZipArchive::CREATE) !== true) {
+        echo json_encode(['errorMessage' => '无法创建ZIP文件'], JSON_UNESCAPED_UNICODE);
+        exit;
+      }
+
+      foreach ($invoices as $invoice) {
+        $items = FzrbsInvoiceItem::find()->where(['invoiceid' => $invoice['id']])->asArray()->all();
+        $xml = $this->generateInvoiceXml($invoice, $items);
+        $filename = '发票_' . $invoice['EIid'] . '_' . $invoice['BuyerName'] . '.xml';
+        $zip->addFromString($filename, $xml);
+      }
+
+      $zip->close();
+
+      Yii::$app->response->format = \yii\web\Response::FORMAT_RAW;
+      Yii::$app->response->headers->set('Content-Type', 'application/zip');
+      Yii::$app->response->headers->set('Content-Disposition', 'attachment; filename="发票导出_' . date('YmdHis') . '.zip"');
+      return file_get_contents($tmpFile);
+    }
+  }
+
+  private function generateInvoiceXml($invoice, $items) {
+    $writer = new \XMLWriter();
+    $writer->openMemory();
+    $writer->setIndent(true);
+    $writer->setIndentString('  ');
+    $writer->startDocument('1.0', 'UTF-8');
+    $writer->startElement('Business');
+    $writer->startElement('Invoice');
+
+    // 主发票信息
+    $writer->writeElement('EIid', $invoice['EIid'] ?? '');
+    $writer->startElement('GeneralOrSpecialVAT');
+    $writer->writeElement('LabelName', $invoice['GeneralOrSpecialVAT'] ?? '');
+    $writer->endElement(); // GeneralOrSpecialVAT
+    $writer->writeElement('RequestTime', $invoice['RequestTime'] ?? '');
+    $writer->writeElement('SellerIdNum', $invoice['SellerIdNum'] ?? '');
+    $writer->writeElement('SellerName', $invoice['SellerName'] ?? '');
+    $writer->writeElement('SellerAddr', $invoice['SellerAddr'] ?? '');
+    $writer->writeElement('SellerTelNum', $invoice['SellerTelNum'] ?? '');
+    $writer->writeElement('SellerBankName', $invoice['SellerBankName'] ?? '');
+    $writer->writeElement('SellerBankAccNum', $invoice['SellerBankAccNum'] ?? '');
+    $writer->writeElement('BuyerName', $invoice['BuyerName'] ?? '');
+    $writer->writeElement('BuyerIdNum', $invoice['BuyerIdNum'] ?? '');
+    $writer->writeElement('BuyerTelNum', $invoice['BuyerTelNum'] ?? '');
+    $writer->writeElement('BuyerAddr', $invoice['BuyerAddr'] ?? '');
+    $writer->writeElement('BuyerBankName', $invoice['BuyerBankName'] ?? '');
+    $writer->writeElement('BuyerBankAccNum', $invoice['BuyerBankAccNum'] ?? '');
+    $writer->writeElement('TotalAmWithoutTax', $invoice['TotalAmwithoutTax'] ?? '');
+    $writer->writeElement('TotalTax-includedAmount', $invoice['TotalTaxIncludedAmount'] ?? '');
+    $writer->writeElement('TotalTaxAm', $invoice['TotalTaxAm'] ?? '');
+    $writer->writeElement('Remark', $invoice['Remark'] ?? '');
+
+    // 发票明细
+    if (!empty($items)) {
+      $writer->startElement('IssuItemInformation');
+      foreach ($items as $item) {
+        $writer->startElement('IssuItem');
+        $writer->writeElement('ItemName', $item['ItemName'] ?? '');
+        $writer->writeElement('SpecMod', $item['SpecMod'] ?? '');
+        $writer->writeElement('MeaUnits', $item['MeaUnits'] ?? '');
+        $writer->writeElement('Quantity', $item['Quantity'] ?? '');
+        $writer->writeElement('UnPrice', $item['UnPrice'] ?? '');
+        $writer->writeElement('Amount', $item['Amount'] ?? '');
+        $writer->writeElement('TaxRate', $item['TaxRate'] ?? '');
+        $writer->writeElement('ComTaxAm', $item['ComTaxAm'] ?? '');
+        $writer->writeElement('TotaltaxIncludedAmount', $item['TotaltaxIncludedAmount'] ?? '');
+        $writer->writeElement('TaxClassificationCode', $item['TaxClassificationCode'] ?? '');
+        $writer->endElement(); // IssuItem
+      }
+      $writer->endElement(); // IssuItemInformation
+    }
+
+    $writer->endElement(); // Invoice
+    $writer->endElement(); // Business
+    $writer->endDocument();
+
+    return $writer->outputMemory();
+  }
+
 }

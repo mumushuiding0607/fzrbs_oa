@@ -126,3 +126,56 @@ Each subdirectory is a self-contained feature module:
 - **Hardcoded secrets**: Backend has credentials in `config/db.php`, `config/web.php`; vue-project has AES keys in `src/utils/aes.ts` — do not expose
 - **moment vs dayjs**: mysite uses deprecated `moment`; vue-project correctly uses `dayjs`
 - **Bundle size**: Heavy packages (xlsx, video.js, pdfjs-dist) are bundled; no lazy loading visible in mysite routes
+
+### Important Database Table Mappings
+- **用户信息表**: `WeixinOAUserInfo` model → table `weixin_leave_userinfo` (NOT `weixin_oa_userinfo` or `weixin_oauser_userinfo`)
+- **流程模板表**: `WeixinOaTemplates` model → table `weixin_templates` (has `templateId`, `templateName`, `templateData` columns)
+- **月度考核模板**: `WeixinYxkhTemplate` model → table `weixin_yxkh_template` ( stores template assignment metadata, NOT templateData)
+- **流程角色表**: `WeixinOaFlowrole` → table `weixin_oa_flowrole` (role assignments with dept/agent/userid)
+- **审批数据表**: `WeixinOaApprovaldata` → table `weixin_oa_approvaldata`
+- **审批信息表**: `WeixinOaApprovalInfo` → table `weixin_oa_approval_info`
+
+## API Reference
+
+### 发票XML导出
+
+**接口**: `/api/invoicingsync/exportxml`
+**方法**: GET (query params) 或 POST (form-data)
+**说明**: 查询发票并导出XML文件，单发票返回XML，多发票返回ZIP
+
+**请求参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `RequestTimeStart` | string | 开票日期开始，YYYY-MM-DD |
+| `RequestTimeEnd` | string | 开票日期结束，YYYY-MM-DD |
+| `publication` | string | 媒体，多个用逗号分隔 |
+| `EIid` | string | 发票号（模糊匹配） |
+| `seller` | string | 销售方名称（模糊匹配） |
+| `businesstype` | string | 业务类型 |
+| `keyword` | string | 关键字搜索（发票号、购买方、销售方） |
+| `pushed` | int | 是否推送（0=未推送，1=已推送） |
+| `includeRed` | int | 是否包含红冲（0=否，1=是，默认1） |
+| `month` | string | 月份筛选，格式YYYY-MM，如2024-01 |
+| `type` | string | 返回类型，json=返回JSON数组（默认），xml=下载XML/ZIP文件 |
+
+**完整示例**:
+```
+# 查询2024年所有发票（默认返回XML/ZIP下载）
+/api/invoicingsync/exportxml?RequestTimeStart=2024-01-01&RequestTimeEnd=2024-12-31&includeRed=1
+
+# 查询并返回JSON数组
+/api/invoicingsync/exportxml?RequestTimeStart=2024-01-01&RequestTimeEnd=2024-12-31&type=json
+
+# 按发票号精确查询（返回XML下载）
+/api/invoicingsync/exportxml?EIid=12345678&type=xml
+
+# 按媒体筛选（返回ZIP下载）
+/api/invoicingsync/exportxml?publication=新媒体,传统媒体&includeRed=0
+
+# POST表单方式（返回XML/ZIP下载）
+<form method="POST" action="/api/invoicingsync/exportxml">
+  <input type="hidden" name="RequestTimeStart" value="2024-01-01">
+  <input type="hidden" name="RequestTimeEnd" value="2024-12-31">
+  <input type="hidden" name="includeRed" value="1">
+</form>
+```

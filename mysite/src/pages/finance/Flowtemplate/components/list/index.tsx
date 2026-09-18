@@ -335,14 +335,18 @@ const List = React.forwardRef((props: ListProps, ref) => {
       title: '操作',
       dataIndex: 'option',
       valueType: 'option',
-      render: (_, entity:any) => 
+      render: (_, entity:any) =>
         <Space size="middle"><a
           key="aedit"
           onClick={() => {
             console.log(entity);
             setCurrentStep(entity);
             setStepTypeVal(entity.type.toString());
-            setCheckWxUserId(entity.type==1?entity.userid:0);
+            // 先重置为 0，触发 DeptSel 组件重置，确保 onChange 能被触发
+            setCheckWxUserId(0);
+            setTimeout(() => {
+              setCheckWxUserId(entity.type==1?entity.userid:0);
+            }, 0);
             setShowApprovalStepForm(true);
           }}
         >

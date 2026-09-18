@@ -29,6 +29,9 @@ class EvaluationController extends ApiBase
     public $modelClass = 'app\modules\api\models\WeixinOAUserInfo';
     protected $agentId = 1000091;
 
+    // 评分截止日期（每月11号）
+    const SCORE_DEADLINE_DAY = 11;
+
     /**
      * 校验考评管理员权限
      * 只有"考评管理员"角色的用户才能操作
@@ -131,8 +134,8 @@ class EvaluationController extends ApiBase
         $scorerId = $this->_adminInfo->wxuserid ?? ($this->_request['wxuserid'] ?? null);
         $page = isset($this->_request['current']) ? intval($this->_request['current']) : 1;
         $pageSize = isset($this->_request['pageSize']) ? intval($this->_request['pageSize']) : 20;
-        $year = $this->_request['year'] ?? null;
-        $quarter = $this->_request['quarter'] ?? null;
+        $year = null;
+        $quarter = null;
         $status = $this->_request['status'] ?? null;
         $keyword = $this->_request['keyword'] ?? null;
         $offset = ($page - 1) * $pageSize;
@@ -479,7 +482,7 @@ class EvaluationController extends ApiBase
     {
         if (empty($notifyUsers)) return;
 
-        $content = "您有{$year}年第{$quarter}季度考评任务待完成，请于10号前及时评分，逾期未评将默认非常满意。请使用[掌上福州->社直部门考评]进行评分。";
+        $content = "您有{$year}年第{$quarter}季度考评任务待完成，请在本月10日以前使用[掌上福州->行政后勤->社直部门考评]及时评分，未评分者默认对考评部门的考评分数为非常满意（95分）。谢谢！！";
         $touser = implode('|', array_column($notifyUsers, 'userid'));
         WxQyhJk::sendMessage($this->agentId, $touser, $content, 'text');
     }
@@ -510,7 +513,7 @@ class EvaluationController extends ApiBase
         }
 
         // 10号之后禁止修改评分
-        if ($deadlineError = $this->_checkDeadline()) {
+        if ($deadlineError = $this->_checkDeadline('修改', $task->year, $task->quarter)) {
             return $deadlineError;
         }
 
@@ -668,7 +671,7 @@ class EvaluationController extends ApiBase
         }
 
         // 10号之后禁止修改评分
-        if ($deadlineError = $this->_checkDeadline()) {
+        if ($deadlineError = $this->_checkDeadline('修改', $task->year, $task->quarter)) {
             return $deadlineError;
         }
 
@@ -736,8 +739,11 @@ class EvaluationController extends ApiBase
         }
 
         // 10号之后禁止删除个人评分
-        if ($deadlineError = $this->_checkDeadline('删除')) {
-            return $deadlineError;
+        $task = FzrbsEvaluationTask::findOne($scoreRecord->task_id);
+        if ($task) {
+            if ($deadlineError = $this->_checkDeadline('删除', $task->year, $task->quarter)) {
+                return $deadlineError;
+            }
         }
 
         $scoreRecord->delete();
@@ -783,7 +789,7 @@ class EvaluationController extends ApiBase
         }
 
         // 10号之后禁止修改评分
-        if ($deadlineError = $this->_checkDeadline()) {
+        if ($deadlineError = $this->_checkDeadline('修改', $task->year, $task->quarter)) {
             return $deadlineError;
         }
 
@@ -889,8 +895,11 @@ class EvaluationController extends ApiBase
         }
 
         // 10号之后禁止修改评分
-        if ($deadlineError = $this->_checkDeadline()) {
-            return $deadlineError;
+        $task = FzrbsEvaluationTask::findOne($scoreRecord->task_id);
+        if ($task) {
+            if ($deadlineError = $this->_checkDeadline('修改', $task->year, $task->quarter)) {
+                return $deadlineError;
+            }
         }
 
         $scoreRecord->score = $score;
@@ -1893,22 +1902,49 @@ class EvaluationController extends ApiBase
     }
 
     /**
-     * 检查是否超过评分截止日期（每月10日）
+     * 检查是否超过评分截止日期
+     * @param int $taskYear 任务年份
+     * @param int $taskQuarter 任务季度
+     * @return bool 是否超过截止日期
      */
-    protected function _isDeadlinePassed()
+    protected function _isDeadlinePassed($taskYear, $taskQuarter)
     {
-        return date('j') > 10;
+        $currentMonth = date('n');
+        $currentYear = date('Y');
+        $currentQuarter = ceil($currentMonth / 3);
+
+        $today = date('j');
+
+        if ($taskYear < $currentYear) {
+            return true;
+        }
+
+        if ($taskYear > $currentYear) {
+            return false;
+        }
+
+        if ($taskQuarter < $currentQuarter) {
+            return $today >= self::SCORE_DEADLINE_DAY;
+        } elseif ($taskQuarter > $currentQuarter) {
+            return true;
+        } else {
+            return $today < self::SCORE_DEADLINE_DAY;
+        }
     }
 
     /**
      * 获取截止日期检查错误信息
      * @param string $action 操作类型：修改/删除，默认修改
+     * @param int|null $taskYear 任务年份
+     * @param int|null $taskQuarter 任务季度
      * @return array|null 如果超过截止日期返回错误数组，否则返回null
      */
-    protected function _checkDeadline($action = '修改')
+    protected function _checkDeadline($action = '修改', $taskYear = null, $taskQuarter = null)
     {
-        if ($this->_isDeadlinePassed()) {
-            return ['message' => "每月10日之后无法{$action}评分"];
+        if ($taskYear !== null && $taskQuarter !== null) {
+            if ($this->_isDeadlinePassed($taskYear, $taskQuarter)) {
+                return ['message' => "每月" . self::SCORE_DEADLINE_DAY . "号之后无法{$action}评分"];
+            }
         }
         return null;
     }

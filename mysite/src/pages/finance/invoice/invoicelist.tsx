@@ -369,7 +369,29 @@ const Invoicelist:React.FC<{}> = ({}) => {
           </>
         ),
         actions: [
-
+          <Button key="exportxml" onClick={() => {
+            if (Object.keys(params).length < 1) {
+              Modal.error({ title: '请先设置查询条件并点击搜索' });
+              return;
+            }
+            // 使用表单提交方式下载文件
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/api/invoicingsync/exportxml';
+            form.style.display = 'none';
+            for (const key in params) {
+              if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = String(params[key]);
+                form.appendChild(input);
+              }
+            }
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+          }}>导出XML</Button>
         ],
       }}
    

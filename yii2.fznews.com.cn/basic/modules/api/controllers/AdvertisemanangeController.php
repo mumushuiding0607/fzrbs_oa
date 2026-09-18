@@ -1447,9 +1447,13 @@ class AdvertisemanangeController extends ApiBase{
           $advitemSql = "SELECT * FROM advitem WHERE SYS_DOCUMENTID = :id";
           $advitem = Yii::$app->paymentdb->createCommand($advitemSql)->bindValues([':id' => $id])->queryOne();
           
-          // 检查是否是本人操作
-          if (!$this->checkAuthor($advitem['SYS_AUTHORS'])) {
-              return ['errorMessage' => '只有本人才能操作'];
+          // 广告审核员可以删除任何月份的广告，跳过本人检查
+          $isAuditor = $this->checkRole('广告审核');
+          if (!$isAuditor) {
+              // 检查是否是本人操作
+              if (!$this->checkAuthor($advitem['SYS_AUTHORS'])) {
+                  return ['errorMessage' => '只有本人才能操作'];
+              }
           }
           // 检查是否有回款，如果有回款则禁止删除
           $amountReceived = floatval($advitem['AI_AmountReceived'] ?? 0);
@@ -1481,11 +1485,13 @@ class AdvertisemanangeController extends ApiBase{
               return ['errorMessage' => '只能删除当月的广告，非当月广告需要广告审核权限'];
           }
 
-          // 检查广告是否有已通过的审批流程（advitem单独审批）
-          $checkApprovalSql = "SELECT COUNT(*) as cnt FROM weixin_oa_approval_info WHERE status = 2 AND data LIKE :infoid";
-          $approvalResult = Yii::$app->db->createCommand($checkApprovalSql)->bindValues([':infoid' => '%"infoid":"' . $id . '"%'])->queryOne();
-          if ($approvalResult && $approvalResult['cnt'] > 0) {
-              return ['errorMessage' => '该广告曾经审核通过过，无法删除'];
+          // 检查广告是否有已通过的审批流程（advitem单独审批），广告审核员可跳过此限制
+          if (!$isAuditor) {
+              $checkApprovalSql = "SELECT COUNT(*) as cnt FROM weixin_oa_approval_info WHERE status = 2 AND data LIKE :infoid";
+              $approvalResult = Yii::$app->db->createCommand($checkApprovalSql)->bindValues([':infoid' => '%"infoid":"' . $id . '"%'])->queryOne();
+              if ($approvalResult && $approvalResult['cnt'] > 0) {
+                  return ['errorMessage' => '该广告曾经审核通过过，无法删除'];
+              }
           }
 
 

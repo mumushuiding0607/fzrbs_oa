@@ -1011,8 +1011,9 @@ class InvoicingController extends ApiBase{
     if ($this->_request['keyword']) {
       $where[] = ['or',['LIKE', 'i.EIid', $this->_request['keyword']],['LIKE', 'i.BuyerName', $this->_request['keyword']],['LIKE', 'i.SellerName', $this->_request['keyword']]];
     }
-    if ($this->_request['EIid']){
-      $where[] = ['like', 'i.EIid', $this->_request['EIid']];
+    $EIid = isset($this->_request['EIid']) ? trim($this->_request['EIid']) : '';
+    if (!empty($EIid)){
+      $where[] = ['like', 'i.EIid', $EIid];
     }
 
     if ($this->_request['RequestTimeStart']){
@@ -1061,7 +1062,7 @@ class InvoicingController extends ApiBase{
 
     return $this->_result;
   }
-  
+
   private function updateInvoicingAmount($invoicingid){
     // 更新开票信息的开票总金额
     $total = FzrbsInvoicingItem::find()->where(['invoicingid'=>$invoicingid])->sum('amount');
@@ -2209,7 +2210,7 @@ public function actionApprovallist(){
     $orderby = $this->_request['orderby'];
   }
   
-  $where = ['and',new Expression("p.thirdNo is not null and p.thirdNo!=''"),['or',new Expression("FIND_IN_SET('".$userid."', i.approvalUserid)"),['=','p.creator',$userid]]];
+  $where = ['and',new Expression("p.thirdNo is not null and p.thirdNo!=''"),['or',new Expression("LOCATE('|".$userid."', CONCAT('|',i.approvalUserid,'|')) > 0"),['=','p.creator',$userid]]];
 
   if (isset($this->_request['state'])&&$this->_request['state']>-1){
     $where[] = ['=','p.approvaltype',$this->_request['state']];
@@ -2219,7 +2220,7 @@ public function actionApprovallist(){
   $model = FzrbsInvoicing::find()->alias('p')
   ->select('i.approvalUsername,`p`.*,d2.label as approvaltypename,u.name,d1.label as contractname')
   ->leftJoin(['u'=>WeixinOAUserInfo::tableName()],'p.creator=u.userid')
-  ->leftJoin(['i'=>WeixinOaApprovalInfo::tableName()],"p.thirdNo=i.thirdNo")
+  ->leftJoin(['i'=>WeixinOaApprovalInfo::tableName()],"p.thirdNo=i.thirdNo and i.agentId=".$this->agentId)
   ->leftJoin(['d1'=>FzrbsBudgetDict::tableName()],"d1.value=p.contract and d1.type='合同业务类型'")
   ->leftJoin(['d2'=>FzrbsBudgetDict::tableName()],"d2.value=p.approvaltype and d2.type='开票审批'")
   ->where($where)->groupBy('p.id,i.approvalUsername,u.name,u.avatar,approvaltypename,contractname');

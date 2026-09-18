@@ -66,6 +66,16 @@ export default defineConfig({
         target: 'http://fzrb.fznews.com.cn/index.php',
         changeOrigin: true, //开启代理
         rewrite: (path) => path.replace(/^\/index/, '')
+      },
+      '^/yxkh': {
+        target: 'http://129.0.97.23:9002/api/v1/yxkh',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/yxkh/, '')
+      },
+      '^/api/yxkh': {
+        target: 'http://127.0.0.1:8888/api',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/yxkh/, '/yxkh')
       }
     }
   },

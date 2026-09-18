@@ -44,7 +44,13 @@ const [activeKey, setActiveKey] = useState('1');
     setActiveKey(e.key);
   };
   const onViewchange = (e:any)=>{
- 
+    if (e && e.basic) {
+      const newThirdno = e.basic.thirdno || e.basic.thirdNo;
+      if (newThirdno !== data1.thirdno) {
+        data1.thirdno = newThirdno;
+        setData1({...data1});
+      }
+    }
   }
 
   const onFinish = (act:any) => {

@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cat)",
-      "Bash(cat ~/.claude/handoffs/extracted1.md ~/.claude/handoffs/extracted2.md)"
+      "Bash(cat ~/.claude/handoffs/extracted1.md ~/.claude/handoffs/extracted2.md)",
+      "Bash(mkdir -p \"C:\\\\Users\\\\zhengyihui\\\\.claude\\\\plans\")",
+      "Read(//c/Users/zhengyihui/.claude/plans/**)"
     ]
   }
 }
